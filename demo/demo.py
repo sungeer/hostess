@@ -2,8 +2,6 @@ import asyncio
 import signal
 import sys
 
-WIN = sys.platform.startswith('win')
-
 
 async def wait_stop(w_seconds, stop_event):
     interval_ms = w_seconds * 1000
@@ -33,6 +31,7 @@ async def task_c(stop):
 
 
 def install_signal_handlers(stop):
+    is_win = sys.platform.startswith('win')
     loop = asyncio.get_running_loop()
 
     def request_stop(signum: int):
@@ -41,7 +40,7 @@ def install_signal_handlers(stop):
     def handler(signum, frame):
         stop.set()
 
-    if WIN:
+    if is_win:
         signal.signal(signal.SIGINT, handler)
     else:
         for sig in (signal.SIGTERM, signal.SIGINT):
