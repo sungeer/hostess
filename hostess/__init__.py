@@ -1,9 +1,13 @@
 import asyncio
+from contextlib import AsyncExitStack
 import signal
 import sys
 
+from hostess.settings import Config
+from hostess import extensions
 
-def install_signal_handlers(stop_event):
+
+def signal_handlers(stop_event):
     is_win = sys.platform.startswith('win')
     loop = asyncio.get_running_loop()
 
@@ -20,22 +24,31 @@ def install_signal_handlers(stop_event):
             loop.add_signal_handler(sig, request_stop, sig)
 
 
-async def task_a(stop):
-    while not stop.is_set():
+async def wait_stop(w_seconds, stop_event):
+    interval_ms = w_seconds * 1000
+    step_ms = 20
+    waited_ms = 0
+    while waited_ms < interval_ms and not stop_event.is_set():
+        await asyncio.sleep(step_ms / 1000)
+        waited_ms += step_ms
+
+
+async def task_a(app):
+    while not app.stop_event.is_set():
         print('a')
-        await wait_stop(1, stop)
+        await app.wait_stop(1)
 
 
-async def task_b(stop):
-    while not stop.is_set():
+async def task_b(app):
+    while not app.stop_event.is_set():
         print('b')
-        await wait_stop(2, stop)
+        await app.wait_stop(2)
 
 
-async def task_c(stop):
-    while not stop.is_set():
+async def task_c(app):
+    while not app.stop_event.is_set():
         print('c')
-        await wait_stop(5, stop)
+        await app.wait_stop(5)
 
 
 class Application:
@@ -54,21 +67,22 @@ class Application:
 
     async def run(self):
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(task_a(self.stop_event))
-            tg.create_task(task_b(self.stop_event))
-            tg.create_task(task_c(self.stop_event))
+            tg.create_task(task_a(self))
+            tg.create_task(task_b(self))
+            tg.create_task(task_c(self))
 
             await self.stop_event.wait()
 
 
 async def main_async():
-    cfg = Config()
-    res = await open_resources(cfg)
     stop_event = asyncio.Event()
-    install_signal_handlers(stop_event)
+    signal_handlers(stop_event)
 
-    app = Application(cfg, res, stop_event)
-    await app.run()
+    cfg = Config()
+
+    async with extensions.resources_handlers(cfg) as res:
+        app = Application(cfg, res, stop_event)
+        await app.run()
 
 
 def main():

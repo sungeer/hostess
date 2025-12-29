@@ -7,7 +7,7 @@ pip install -r requirements.txt
 
 
 
-python -m pip install asyncmy httpx
+python -m pip install asyncmy httpx sqlalchemy
 
 
 

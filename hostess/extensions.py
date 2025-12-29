@@ -1,63 +1,67 @@
-import asyncmy
-from asyncmy.cursors import DictCursor
+from contextlib import suppress, AsyncExitStack, asynccontextmanager
+
 import httpx
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 
-async def get_db_pool(cfg):
-    db_pool = await asyncmy.create_pool(
-        host=cfg.mysql_host,
-        port=cfg.mysql_port,
-        user=cfg.mysql_user,
-        password=cfg.mysql_password,
-        db=cfg.mysql_db,
-        minsize=cfg.mysql_min_size,
-        maxsize=cfg.mysql_max_size,
-        pool_recycle=1800,
-        charset='utf8mb4',
-        cursorclass=DictCursor,
-    )
-    return db_pool
-
-
-async def get_httpx_client(cfg):
+def get_httpx_client(cfg):
     limits = httpx.Limits(
-        max_keepalive_connections=cfg.http_max_keepalive,
-        max_connections=cfg.http_max_connections,
+        max_keepalive_connections=cfg.httpx.max_keepalive,
+        max_connections=cfg.httpx.max_connections,
     )
     httpx_client = httpx.AsyncClient(
-        timeout=httpx.Timeout(cfg.http_timeout_s),
+        timeout=httpx.Timeout(cfg.httpx.timeout_s),
         limits=limits,
     )
     return httpx_client
 
 
-class DBConnection:
-    def __init__(self):
-        self.conn = None
-        self.cursor = None
+async def closee_httpx(client):
+    with suppress(Exception):
+        await client.aclose()
 
-    def __enter__(self):
-        self.conn = create_dbconn()
-        self.cursor = self.conn.cursor()
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cursor.close()
-        self.conn.close()
+# db pool
+def get_dbpool(db_url):
+    engine = create_async_engine(
+        db_url,
+        echo=False,
+        pool_size=5,          # 常驻 5 条连接
+        max_overflow=10,       # 高峰额外最多再开 10 条
+        pool_timeout=30,       # 取连接等待 30s 失败就报错
+        pool_recycle=1800,     # 回收重连
+        pool_pre_ping=True,    # 避免拿到失效连接
+        pool_use_lifo=True,    # 复用热连接
+    )
+    # await engine.dispose()  # 关闭连接池
+    return engine
 
-    def commit(self):
-        try:
-            self.conn.commit()
-        except (Exception,):
-            self.conn.rollback()
 
-    def begin(self):
-        self.conn.begin()
+async def close_dbpool(engine):
+    with suppress(Exception):
+        await engine.dispose()
 
-    def execute(self, sql_str, values=None):
-        try:
-            self.cursor.execute(sql_str, values)
-        except Exception:
-            self.rollback()
-            self.close()
-            raise
+
+def get_dbconn(db_pool):
+    session = async_sessionmaker(db_pool, expire_on_commit=False, class_=AsyncSession)
+    return session
+
+
+class Resources:
+    def __init__(self, httpx_client, db_conn):
+        self.httpx_client = httpx_client
+        self.db_conn = db_conn
+
+
+@asynccontextmanager
+async def resources_handlers(cfg):
+    async with AsyncExitStack() as stack:
+        httpx_client = get_httpx_client(cfg)
+        stack.push_async_callback(closee_httpx, httpx_client)
+
+        db_url = f'mysql+asyncmy://{cfg.db.user}:{cfg.db.passwd}@{cfg.db.host}:{cfg.db.port}/{cfg.db.name}?charset=utf8mb4'
+        db_pool = get_dbpool(db_url)
+        stack.push_async_callback(close_dbpool, db_pool)
+
+        db_conn = get_dbconn(db_pool)  # Session obj
+        yield Resources(httpx_client=httpx_client, db_conn=db_conn)
