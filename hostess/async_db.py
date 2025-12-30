@@ -1,4 +1,4 @@
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 
 db_url = 'mysql+asyncmy://user:password@127.0.0.1:3306/testdb?charset=utf8mb4'
@@ -14,34 +14,53 @@ engine = create_async_engine(
     pool_use_lifo=True,  # 复用热连接
 )
 
+
 # await engine.dispose()  # 关闭
 
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-
-async def query_as_dicts():
+async def query_one():
     sql = text('''
-        SELECT
-            id, name, age
-        FROM
-            user
-        WHERE
-            age >= :min_age
+        SELECT id, name, age
+        FROM user
+        WHERE id = :id
+    ''')
+    async with engine.connect() as conn:
+        result = await conn.execute(sql, {'id': 1})
+        row = result.mappings().first()  # RowMapping | None
+        # row = result.mappings().one()  # 没有或多于一条都会抛异常
+        return dict(row) if row else None
+
+
+async def query_many():
+    sql = text('''
+        SELECT id, name, age
+        FROM user
+        WHERE age >= :min_age
         ORDER BY id
         LIMIT :limit
     ''')
-    async with SessionLocal() as session:
-        result = await session.execute(sql, {"min_age": 18, "limit": 10})
-        return [dict(r) for r in result.mappings().all()]
+    async with engine.connect() as conn:
+        result = await conn.execute(sql, {'min_age': 18, 'limit': 10})
+        rows = result.mappings().all()  # list[RowMapping]
+        return [dict(r) for r in rows]
 
 
-async def do_update():
-    async with SessionLocal() as session:
-        async with session.begin():  # 事务开始
-            result = await session.execute(
-                text("UPDATE user SET name=:name WHERE id=:id"),
-                {"name": "new", "id": 1},
-            )
-            # 不需要手动 commit()
-            return result.rowcount
-        # 如果上面任何一步抛异常 -> 自动 rollback
+async def insert_user(name, age):
+    sql = text('INSERT INTO user(name, age) VALUES (:name, :age)')
+    async with engine.begin() as conn:
+        result = await conn.execute(sql, {'name': name, 'age': age})
+        return result.rowcount, result.lastrowid
+
+
+async def update_user_name(user_id, new_name):
+    sql = text('UPDATE user SET name = :name WHERE id = :id')
+    async with engine.begin() as conn:
+        result = await conn.execute(sql, {'name': new_name, 'id': user_id})
+        return result.rowcount
+
+
+async def delete_user(user_id):
+    sql = text('DELETE FROM user WHERE id = :id')
+    async with engine.begin() as conn:
+        result = await conn.execute(sql, {'id': user_id})
+        return result.rowcount
