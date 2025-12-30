@@ -33,3 +33,15 @@ async def query_as_dicts():
     async with SessionLocal() as session:
         result = await session.execute(sql, {"min_age": 18, "limit": 10})
         return [dict(r) for r in result.mappings().all()]
+
+
+async def do_update():
+    async with SessionLocal() as session:
+        async with session.begin():  # 事务开始
+            result = await session.execute(
+                text("UPDATE user SET name=:name WHERE id=:id"),
+                {"name": "new", "id": 1},
+            )
+            # 不需要手动 commit()
+            return result.rowcount
+        # 如果上面任何一步抛异常 -> 自动 rollback
