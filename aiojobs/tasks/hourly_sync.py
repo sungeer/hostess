@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 
-from aiojobs.runtime import Runtime, TaskSpec
+from runtime import TaskSpec, Runtime
 
 TASK_ID = "example_task"
 
@@ -13,36 +13,36 @@ async def main(rt: Runtime) -> None:
 
     while True:
         try:
-            # 安全点：支持“停前全暂停”
-            await rt.pause_event.wait()
-
-            # 使用 DB 运行型配置快照
-            wl = rt.dbcfg.whitelist
+            # 你手动改 DB 开关后，这里会在 refresh interval 内生效
             enabled = rt.dbcfg.switches.get("enable_sync", True)
-            max_qps = rt.dbcfg.thresholds.get("max_qps", 10.0)
-
             if not enabled:
-                await asyncio.sleep(1)
+                # “暂停模式”：不执行业务逻辑，但别空转
+                await asyncio.sleep(0.5)
                 continue
 
-            # 业务示例：白名单判断
+            # 白名单示例：为空表示不限制；非空则必须命中
             user_id = "u1"
-            if wl and user_id not in wl:
-                await asyncio.sleep(1)
+            wl = rt.dbcfg.whitelist
+            if wl and (user_id not in wl):
+                await asyncio.sleep(0.5)
                 continue
 
-            # 外部请求示例（httpx 配置来自 infra.py，不热更新）
+            # 阈值示例：控制节奏
+            max_qps = rt.dbcfg.thresholds.get("max_qps", 10.0)
+            delay = (1 / max_qps) if max_qps and max_qps > 0 else 0.2
+
+            # 业务逻辑示例（外部请求）
             r = await rt.http.get("https://httpbin.org/get")
             _ = r.status_code
 
-            # 你自己的节奏控制
-            await asyncio.sleep(1 / max_qps if max_qps > 0 else 1)
+            await asyncio.sleep(delay)
 
         except asyncio.CancelledError:
+            # 无脑 cancel 时要立刻退出
             raise
         except Exception:
-            # logger.exception(...)
-            await asyncio.sleep(1)
+            # 可接 logger.exception(...)
+            await asyncio.sleep(1.0)
 
 
-ts = TaskSpec(task_id=TASK_ID, entry=main)
+SPEC = TaskSpec(task_id=TASK_ID, entry=main)

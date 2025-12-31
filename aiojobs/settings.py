@@ -15,7 +15,7 @@ class InfraConfig:
     http_proxy: str | None
 
 
-def load_infra_config() -> InfraConfig:
+def load_config():
     """
     你要求：连接类配置放在 py 文件中。
     这里用 APP_ENV 做分支即可。你也可以改成读取机器 hostname 等。
