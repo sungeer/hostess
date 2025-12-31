@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 
-from runtime import Runtime, TaskSpec
+from aiojobs.runtime import Runtime, TaskSpec
 
 TASK_ID = "example_task"
 
@@ -45,4 +45,4 @@ async def main(rt: Runtime) -> None:
             await asyncio.sleep(1)
 
 
-SPEC = TaskSpec(task_id=TASK_ID, entry=main)
+ts = TaskSpec(task_id=TASK_ID, entry=main)
