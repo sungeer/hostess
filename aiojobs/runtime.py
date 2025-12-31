@@ -5,8 +5,6 @@ import asyncio
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from dbcfg import DbConfigSnapshot, load_runtime_config
-
 
 class TaskSpec:
     def __init__(self, task_id, entry):
@@ -21,7 +19,7 @@ class Application:
         self.engine = None
         self.http = None
 
-        self._dbcfg = DbConfigSnapshot.default()
+        self._dbswitch = None
         self._tasks = {}
 
     async def __aenter__(self):
@@ -45,11 +43,11 @@ class Application:
             headers={"User-Agent": f"async-worker/1.0 ({self.config.app_env})"},
         )
 
-        await self.refresh_dbcfg()  # 加载数据库动态配置
+        await self.refresh_dbswitch()
 
-        self._tasks['_dbcfg_refresher'] = asyncio.create_task(
-            self._dbcfg_refresher_loop(),
-            name='dbcfg_refresher',
+        self._tasks['_dbswitch_refresher'] = asyncio.create_task(
+            self._refresher_dbswitch_task(),
+            name='dbswitch_refresher',
         )
 
         return self
@@ -58,20 +56,24 @@ class Application:
         await self.shutdown()
 
     @property
-    def dbcfg(self):
-        return self._dbcfg
+    def dbswitch(self):
+        return self._dbswitch
 
-    async def refresh_dbcfg(self) -> None:
-        async with self.session() as s:
-            snap = await load_runtime_config(s)
-        self._dbcfg = snap
+    async def refresh_dbswitch(self):
+        sql_str = '''
+            SELECT 1
+        '''
+        async with self.engine.connect() as conn:
+            result = await conn.execute(sql_str)
+            rows = result.mappings().all()
+            switchs = [dict(r) for r in rows]
+        self._dbswitch = switchs
 
-    # 刷新数据库动态配置
-    async def _dbcfg_refresher_loop(self):
+    async def _refresher_dbswitch_task(self):
         while True:
             try:
                 await asyncio.sleep(30)
-                await self.refresh_dbcfg()
+                await self.refresh_dbswitch()
             except asyncio.CancelledError:
                 raise
             except (Exception,):

@@ -1,9 +1,18 @@
 """
 'async', 'run'
 """
+import logging
 
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+handler = logging.FileHandler("app.log")
+formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 class DemoResource:
@@ -62,6 +71,17 @@ async def main():
 
             # 一直运行，直到 Ctrl+C
             await asyncio.Event().wait()
+
+
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    logger.critical(
+        "Uncaught exception, application will terminate.",
+        exc_info=(exc_type, exc_value, exc_traceback),
+    )
+
+import sys
+
+sys.excepthook = handle_uncaught_exception
 
 
 if __name__ == "__main__":
