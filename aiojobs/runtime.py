@@ -19,7 +19,7 @@ class Application:
         self.engine = None
         self.http = None
 
-        self._dbconfig = None
+        self._settings = None
         self._tasks = {}
 
     async def __aenter__(self):
@@ -29,6 +29,8 @@ class Application:
             pool_pre_ping=True,
             pool_recycle=1800,
         )
+
+        assert self.engine is not None
 
         limits = httpx.Limits(
             max_connections=self.config.http_max_connections,
@@ -43,11 +45,13 @@ class Application:
             headers={"User-Agent": f"async-worker/1.0 ({self.config.app_env})"},
         )
 
-        await self.refresh_dbconfig()
+        assert self.http is not None
 
-        self._tasks['_dbconfig_refresher'] = asyncio.create_task(
-            self._refresher_dbconfig_task(),
-            name='dbconfig_refresher',
+        await self.refresh_settings()
+
+        self._tasks['_settings_refresher'] = asyncio.create_task(
+            self._refresher_settings_task(),
+            name='settings_refresher',
         )
 
         return self
@@ -56,24 +60,36 @@ class Application:
         await self.shutdown()
 
     @property
-    def dbconfig(self):
-        return self._dbconfig
+    def settings(self):
+        # obj.settings
+        return self._settings
 
-    async def refresh_dbconfig(self):
-        sql_str = '''
-            SELECT 1
+    async def refresh_settings(self):
+        """多种配置
+        {
+            'whitelist': ['u1','u2'],
+            'thresholds': {'max_qps': 12, 'warn_latency_ms': 800},
+            'switches': {'enable_sync': true}
+        }
+        """
+        settings = {}
+        sql_switch = '''
+            SELECT id, task_name, status
+            FROM switch
+            WHERE is_deleted = 0
         '''
         async with self.engine.connect() as conn:
-            result = await conn.execute(sql_str)
+            result = await conn.execute(sql_switch)
             rows = result.mappings().all()
-            switchs = [dict(r) for r in rows]
-        self._dbconfig = switchs
+            switches = [dict(r) for r in rows]
+        settings.update({'switches': switches})
+        self._settings = settings
 
-    async def _refresher_dbconfig_task(self):
+    async def _refresher_settings_task(self):
         while True:
             try:
                 await asyncio.sleep(30)
-                await self.refresh_dbconfig()
+                await self.refresh_settings()
             except asyncio.CancelledError:
                 raise
             except (Exception,):

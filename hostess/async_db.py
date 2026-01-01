@@ -1,5 +1,6 @@
 """
 'sqlalchemy', 'pool', 'db'
+SQLAlchemy 2.x
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine
