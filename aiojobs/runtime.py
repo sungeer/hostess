@@ -19,7 +19,7 @@ class Application:
         self.engine = None
         self.http = None
 
-        self._dbswitch = None
+        self._dbconfig = None
         self._tasks = {}
 
     async def __aenter__(self):
@@ -43,11 +43,11 @@ class Application:
             headers={"User-Agent": f"async-worker/1.0 ({self.config.app_env})"},
         )
 
-        await self.refresh_dbswitch()
+        await self.refresh_dbconfig()
 
-        self._tasks['_dbswitch_refresher'] = asyncio.create_task(
-            self._refresher_dbswitch_task(),
-            name='dbswitch_refresher',
+        self._tasks['_dbconfig_refresher'] = asyncio.create_task(
+            self._refresher_dbconfig_task(),
+            name='dbconfig_refresher',
         )
 
         return self
@@ -56,10 +56,10 @@ class Application:
         await self.shutdown()
 
     @property
-    def dbswitch(self):
-        return self._dbswitch
+    def dbconfig(self):
+        return self._dbconfig
 
-    async def refresh_dbswitch(self):
+    async def refresh_dbconfig(self):
         sql_str = '''
             SELECT 1
         '''
@@ -67,13 +67,13 @@ class Application:
             result = await conn.execute(sql_str)
             rows = result.mappings().all()
             switchs = [dict(r) for r in rows]
-        self._dbswitch = switchs
+        self._dbconfig = switchs
 
-    async def _refresher_dbswitch_task(self):
+    async def _refresher_dbconfig_task(self):
         while True:
             try:
                 await asyncio.sleep(30)
-                await self.refresh_dbswitch()
+                await self.refresh_dbconfig()
             except asyncio.CancelledError:
                 raise
             except (Exception,):
