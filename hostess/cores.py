@@ -1,8 +1,11 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+
+from hostess import tasks
 
 
 @asynccontextmanager
@@ -20,9 +23,21 @@ async def lifespan(app):
         pool_use_lifo=True,  # 复用热连接
     )
 
+    ts = tasks.tasks
+    bg_tasks = []
+
+    for t in ts:
+        bg_task = asyncio.create_task(t(app))
+        bg_tasks.append(bg_task)
+
     try:
         yield
     finally:
+        for bg_task in bg_tasks:
+            bg_task.cancel()
+
+        await asyncio.gather(*bg_tasks, return_exceptions=True)
+
         await app.state.db.dispose()
 
 
