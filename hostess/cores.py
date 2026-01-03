@@ -8,6 +8,17 @@ from starlette.middleware.cors import CORSMiddleware
 from hostess import tasks
 
 
+async def get_db_pauses(db):
+    sql_str = '''
+        a
+    '''
+    async with db.connect() as conn:
+        result = await conn.execute(sql_str)
+        rows = result.mappings().all()
+    result = [dict(r) for r in rows]
+    return {r['task_key']: r['is_paused'] for r in result}
+
+
 @asynccontextmanager
 async def lifespan(app):
     db_url = 'mysql+asyncmy://user:password@127.0.0.1:3306/testdb?charset=utf8mb4'
@@ -23,10 +34,25 @@ async def lifespan(app):
         pool_use_lifo=True,  # 复用热连接
     )
 
-    ts = tasks.tasks
+    app.state.is_exit = 0  # 全局任务退出 0运行 1退出
+
+    db_pauses = await get_db_pauses(app.state.db)
+
+    ts = tasks.tasks  # task_model_obj
     bg_tasks = []
 
     for t in ts:
+        t = t.entry  # task func
+        task_key = t.task_id
+
+        setattr(app.state, f'{task_key}_run_status', 'running')  # 初始化运行状态
+
+        db_pause = db_pauses.get(task_key, 0)
+        if db_pause:
+            setattr(app.state, f'{task_key}_is_pause', 1)
+        else:
+            setattr(app.state, f'{task_key}_is_pause', 0)  # 每个任务的持久化启停 0运行 1停止
+
         bg_task = asyncio.create_task(t(app))
         bg_tasks.append(bg_task)
 

@@ -1,4 +1,7 @@
 import asyncio
+import time
+
+from hostess import models
 
 task_key = 'demo'
 
@@ -6,18 +9,29 @@ task_key = 'demo'
 async def worker(app):
     while True:
         try:
-            is_exit = app.state.is_exit
-            if is_exit:
-                return
+            if app.state.is_exit:
+                setattr(app.state, f'{task_key}_run_status', 'exiting')
+                await asyncio.sleep(3)
+                continue
 
-            is_pause = get_switch(task_key)
-            # v = getattr(app.state, "is_exit", False)
-            # setattr(app.state, "is_exit", False)
+            is_pause = getattr(app.state, f'{task_key}_is_pause')
             if is_pause:
-                app.state.
+                setattr(app.state, f'{task_key}_run_status', 'pausing')
+                await asyncio.sleep(3)
+                continue
+
+            setattr(app.state, f'{task_key}_run_status', 'running')
+
+            t0 = time.perf_counter()
+
+            dt = time.perf_counter() - t0
+            print(f'func took {dt:.3f}s')
 
             await asyncio.sleep(3)
         except asyncio.CancelledError:
             raise
         except (Exception,):
             pass
+
+
+tm = models.TaskModel(task_key, worker)
