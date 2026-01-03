@@ -46,7 +46,7 @@ CREATE TABLE task_runtime (
 
 
 
-CREATE TABLE task_global_ctrl (
+CREATE TABLE config_switch (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
   ctrl_key    VARCHAR(64) NOT NULL COMMENT '开关名',
   is_active   TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0关 1开',

@@ -12,6 +12,11 @@ class TaskSpec:
         self.entry = entry
 
 
+class DBConfig:
+    def __init__(self, switches):
+        self.switches = switches  # dict
+
+
 class Application:
     def __init__(self, config):
         self.config = config
