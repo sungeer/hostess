@@ -3,7 +3,7 @@ import time
 
 from hostess import models
 
-task_key = 'demo'
+task_key = 'demo_a'
 
 
 async def worker(app):

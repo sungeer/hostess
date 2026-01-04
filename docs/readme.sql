@@ -11,6 +11,12 @@ python -m pip install asyncmy httpx sqlalchemy starlette orjson uvicorn loguru
 
 
 
+uvicorn demo:app --host 0.0.0.0 --port 8000
+
+
+uvicorn demo:app --port 7788
+
+
 # -------------------------
 # App / State (Starlette-ish)
 # -------------------------
@@ -33,7 +39,6 @@ CREATE TABLE task (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务';
 
 
-
 CREATE TABLE switch (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
   task_id     BIGINT UNSIGNED NOT NULL COMMENT 'task表ID',
@@ -46,4 +51,12 @@ CREATE TABLE switch (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='持久化启停开关';
 
 
+-- 1) 插入 task
+INSERT INTO task (task_name, task_key, task_func, doc_about, is_deleted)
+VALUES ('测试', 'demo_a', 'tasks.demo_a.worker', '3.2', 0);
+
+
+-- 2) 插入 switch（关联刚插入的 task.id）
+INSERT INTO switch (task_id, is_paused)
+VALUES (1, 0);
 

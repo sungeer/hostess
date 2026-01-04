@@ -1,5 +1,5 @@
-from hostess import utils
+from hostess.utils import jsonify
 
 
 async def healthz(request):
-    return utils.jsonify()
+    return jsonify()

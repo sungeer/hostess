@@ -6,6 +6,6 @@ from hostess import cores
 app = Starlette(
     routes = cores.routes,
     middleware = cores.middleware,
-    exception_handlers = register_errors,
+    exception_handlers = cores.exception_handlers,
     lifespan = cores.lifespan
 )

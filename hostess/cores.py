@@ -1,25 +1,58 @@
 import asyncio
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 from starlette.routing import Route, Mount
 
-from hostess import tasks
+from hostess import tasks, utils
 from hostess.views import index
 from hostess.urls import task_url
 
+
+async def http_exception_handler(request: Request, exc: HTTPException):
+    error_code = exc.status_code
+    error_message = HTTPStatus(error_code).phrase
+    print(str(exc.detail))
+    return utils.abort(error_code, error_message)
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    error_code = 500
+    error_message = HTTPStatus(error_code).phrase
+    # 'Internal Server Error'
+    print(f'Internal Server Error:\n{exc}')
+    return utils.abort(error_code, error_message)
+
+
+exception_handlers = {
+    HTTPException: http_exception_handler,
+    Exception: unhandled_exception_handler
+}
+
+
 routes = [
     Route('/', endpoint=index.healthz, methods=['GET']),
-    Mount('/task', app=task_url.chat_url)
+    Mount('/task', app=task_url.task_url)
 ]
 
 
 async def get_db_pauses(db):
-    sql_str = '''
-        a
-    '''
+    sql_str = text('''
+        SELECT
+            t.task_name, t.task_key, s.is_paused
+        FROM
+            task t
+            LEFT JOIN switch s
+                ON s.task_id = t.id
+        WHERE
+            t.is_deleted = 0
+    ''')
     async with db.connect() as conn:
         result = await conn.execute(sql_str)
         rows = result.mappings().all()
@@ -29,7 +62,7 @@ async def get_db_pauses(db):
 
 @asynccontextmanager
 async def lifespan(app):
-    db_url = 'mysql+asyncmy://user:password@127.0.0.1:3306/testdb?charset=utf8mb4'
+    db_url = 'mysql+asyncmy://root:admin@127.0.0.1:3306/hostess?charset=utf8mb4'
 
     app.state.db = create_async_engine(
         db_url,
