@@ -30,7 +30,7 @@ CREATE TABLE task (
 
   PRIMARY KEY (id),
   UNIQUE KEY uk_task_key (task_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务';
 
 
 
@@ -43,7 +43,7 @@ CREATE TABLE switch (
 
   PRIMARY KEY (id),
   KEY idx_task_id (task_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='持久化启停开关';
 
 
 

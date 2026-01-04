@@ -4,8 +4,16 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Route, Mount
 
 from hostess import tasks
+from hostess.views import index
+from hostess.urls import task_url
+
+routes = [
+    Route('/', endpoint=index.healthz, methods=['GET']),
+    Mount('/task', app=task_url.chat_url)
+]
 
 
 async def get_db_pauses(db):
