@@ -19,6 +19,18 @@ async def get_tasks(request):
     return jsonify(tasks)
 
 
+async def get_task(request):
+    body = await request.json()
+    task_id = body.get('task_id')
+    db = request.app.state.db
+    db_task = await task_service.get_task(db, task_id)
+    task_key = db_task['task_key']
+    status = getattr(request.app.state, f'{task_key}_run_status')
+    db_task['memory_status'] = status
+    print(db_task)
+    return jsonify(db_task)
+
+
 # 持久化暂停
 async def pause_task(request):
     body = await request.json()
@@ -40,7 +52,7 @@ async def run_task(request):
     db_task = await task_service.run_task(db, task_id)
     task_key = db_task.get('task_key')
     is_paused = db_task.get('is_paused')
-    if task_key and is_paused:
+    if task_key and not is_paused:
         setattr(request.app.state, f'{task_key}_is_pause', 0)
     return jsonify()
 
