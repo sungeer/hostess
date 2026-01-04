@@ -23,7 +23,7 @@ uvicorn demo:app --port 7788
 
 
 
-
+-- 任务
 CREATE TABLE task (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
   task_name   VARCHAR(128) NOT NULL COMMENT '任务名',
@@ -39,6 +39,7 @@ CREATE TABLE task (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务';
 
 
+-- 持久化 启停 开关
 CREATE TABLE switch (
   id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
   task_id     BIGINT UNSIGNED NOT NULL COMMENT 'task表ID',
@@ -59,4 +60,27 @@ VALUES ('测试', 'demo_a', 'tasks.demo_a.worker', '3.2', 0);
 -- 2) 插入 switch（关联刚插入的 task.id）
 INSERT INTO switch (task_id, is_paused)
 VALUES (1, 0);
+
+
+-- 异常记录
+
+
+
+-- 操作记录
+
+
+
+-- 订单
+CREATE TABLE produce_item (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
+  assign_item_id   VARCHAR(255) NOT NULL COMMENT '订单明细ID',
+  task_key    VARCHAR(128) NOT NULL COMMENT '任务键名',
+  is_deleted  TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0未删 1已删',
+  created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_assign_item_id (assign_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生产单';
+
 

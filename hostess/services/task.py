@@ -4,7 +4,7 @@ from sqlalchemy import text
 async def get_tasks(db):
     sql_str = text('''
         SELECT
-            t.task_name, t.task_key, s.is_paused, t.updated_at
+            t.id, t.task_name, t.task_key, s.is_paused
         FROM
             task t
             LEFT JOIN switch s

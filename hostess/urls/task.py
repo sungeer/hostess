@@ -4,7 +4,7 @@ from hostess.views import task
 
 route = Router()
 
-route.add_route('/get-tasks', task.get_tasks, ['POST'])
+route.add_route('/get-tasks', task.get_tasks, ['GET'])
 # 持久化暂停
 route.add_route('/pause-task', task.pause_task, ['POST'])
 # 持久化运行
