@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import time
 
 from hostess import models
@@ -23,6 +24,10 @@ async def worker(app):
             setattr(app.state, f'{task_key}_run_status', 'running')
 
             t0 = time.perf_counter()
+
+            await asyncio.sleep(0.3)
+
+            print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
             dt = time.perf_counter() - t0
             print(f'func took {dt:.3f}s')

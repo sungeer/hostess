@@ -12,7 +12,7 @@ from starlette.routing import Route, Mount
 
 from hostess import tasks, utils
 from hostess.views import index
-from hostess.urls import task_url
+from hostess.urls import task
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -38,7 +38,7 @@ exception_handlers = {
 
 routes = [
     Route('/', endpoint=index.healthz, methods=['GET']),
-    Mount('/task', app=task_url.task_url)
+    Mount('/task', app=task.route)
 ]
 
 
@@ -83,7 +83,7 @@ async def lifespan(app):
     bg_tasks = []
 
     for t in ts:
-        t = t.entry  # task func
+        task_func = t.entry  # task func
         task_key = t.task_id
 
         setattr(app.state, f'{task_key}_run_status', 'running')  # 初始化运行状态
@@ -94,7 +94,7 @@ async def lifespan(app):
         else:
             setattr(app.state, f'{task_key}_is_pause', 0)  # 每个任务的持久化启停 0运行 1停止
 
-        bg_task = asyncio.create_task(t(app))
+        bg_task = asyncio.create_task(task_func(app))
         bg_tasks.append(bg_task)
 
     try:
