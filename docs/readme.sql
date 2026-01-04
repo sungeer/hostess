@@ -74,13 +74,53 @@ VALUES (1, 0);
 CREATE TABLE produce_item (
   id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
   assign_item_id   VARCHAR(255) NOT NULL COMMENT '订单明细ID',
-  task_key    VARCHAR(128) NOT NULL COMMENT '任务键名',
-  is_deleted  TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0未删 1已删',
-  created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
-  updated_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  task_key         VARCHAR(128) NOT NULL COMMENT '任务键名',
+  is_deleted       TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0未删 1已删',
+  created_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
 
   PRIMARY KEY (id),
   UNIQUE KEY uk_assign_item_id (assign_item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生产单';
+
+
+-- 原始数据
+CREATE TABLE in_raw (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
+  produce_item_id  VARCHAR(255) NOT NULL COMMENT 'produce_item表ID',
+  payload          JSON NOT NULL COMMENT '原始数据',
+  created_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_produce_item_id (produce_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='原始数据';
+
+
+-- 订单 有效字段 给台风用
+CREATE TABLE produce_json (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
+  produce_item_id  VARCHAR(255) NOT NULL COMMENT 'produce_item表ID',
+  payload          JSON NOT NULL COMMENT '有效字段',
+  created_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_produce_item_id (produce_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单有效数据';
+
+
+-- 订单 接收 回执
+CREATE TABLE produce_ack (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增ID',
+  produce_item_id  VARCHAR(255) NOT NULL COMMENT 'produce_item表ID',
+  status           TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=PEND,1=OK,2=RETRY,3=DEAD',
+  retry_count      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '重试次数,最多3次',
+  created_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_produce_item_id (produce_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单接收回执';
 
 
