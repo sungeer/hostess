@@ -1,0 +1,14 @@
+.venv/
+.idea/
+
+logs/
+data/
+
+docs/
+
+tests/
+
+.env
+
+*.log
+*.db
