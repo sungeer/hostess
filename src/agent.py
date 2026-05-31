@@ -384,9 +384,9 @@ def _agent_loop(client: OpenAI, messages: list) -> None:
 
 
 def _print_banner() -> None:
-    print('* hostess — an agentic coding tool')
-    print(f'* model: {model:<37}')
-    print(f'* command: /help /clear /quit /exit')
+    print('* Hostess Code v26.0601.0629')
+    print(f'* {model} · API Usage Billing')
+    print(f'* /help /clear /quit /exit')
     print()
 
 
