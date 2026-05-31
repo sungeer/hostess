@@ -1,16 +1,21 @@
-#!/usr/bin/env python3
-"""hostess — 极简 coding agent，在命令行帮你读代码、写代码、执行命令"""
-
-# === 章节 1: 配置 ===
-
 import os
+import glob as _glob
+import json
+import re
+import subprocess
+from pathlib import Path
 
-API_BASE_URL = os.environ.get('API_BASE_URL', 'http://localhost:8000/v1')
-API_KEY = os.environ.get('API_KEY', 'sk-no-key')
-MODEL = os.environ.get('MODEL', 'deepseek-chat')
-MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '16384'))
+from dotenv import load_dotenv
+from openai import OpenAI
 
-DEFAULT_SYSTEM_PROMPT = (
+load_dotenv()
+
+api_base_url = os.environ.get('API_BASE_URL')
+api_key = os.environ.get('API_KEY')
+model = os.environ.get('MODEL', 'deepseek-v4-flash')
+max_tokens = int(os.environ.get('MAX_TOKENS', '65536'))
+
+system_prompt = (
     '你是一个在命令行工作的 AI 编码助手。\n'
     '\n'
     '## 工作方式\n'
@@ -29,16 +34,6 @@ DEFAULT_SYSTEM_PROMPT = (
     '- 不要无理由地改变与任务无关的代码\n'
     '- shell 命令无沙箱限制，注意安全性'
 )
-SYSTEM_PROMPT = os.environ.get('SYSTEM_PROMPT', DEFAULT_SYSTEM_PROMPT)
-
-
-# === 章节 2: 工具实现 ===
-
-import glob as _glob
-import json
-import re
-import subprocess
-from pathlib import Path
 
 
 def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
@@ -174,7 +169,7 @@ def tool_bash(cmd: str) -> str:
 
 
 # 工具注册表
-TOOL_MAP = {
+tool_map = {
     'read': tool_read,
     'write': tool_write,
     'glob': tool_glob,
@@ -194,9 +189,7 @@ def _short(args: dict) -> str:
     return ', '.join(items)
 
 
-# === 章节 3: OpenAI Tool Schema ===
-
-TOOLS_SCHEMA = [
+tools_schema = [
     {
         'type': 'function',
         'function': {
@@ -319,21 +312,16 @@ TOOLS_SCHEMA = [
 ]
 
 
-# === 章节 4: Agent 循环 ===
-
-from openai import OpenAI
-
-
 def _agent_loop(client: OpenAI, messages: list) -> None:
     """处理 LLM 的工具调用循环，最多 20 轮。"""
     for _round in range(20):
         try:
             resp = client.chat.completions.create(
-                model=MODEL,
+                model=model,
                 messages=messages,  # type: ignore[arg-type]
-                tools=TOOLS_SCHEMA,  # type: ignore[arg-type]
+                tools=tools_schema,  # type: ignore[arg-type]
                 tool_choice='auto',
-                max_tokens=MAX_TOKENS,
+                max_tokens=max_tokens,
                 temperature=0.1,
             )
         except Exception as e:
@@ -369,7 +357,7 @@ def _agent_loop(client: OpenAI, messages: list) -> None:
         # 执行每个工具调用
         for tc in msg.tool_calls:
             fn_name = tc.function.name
-            handler = TOOL_MAP.get(fn_name)
+            handler = tool_map.get(fn_name)
 
             try:
                 fn_args = json.loads(tc.function.arguments)
@@ -399,8 +387,8 @@ def _print_banner() -> None:
     print(f'╔══════════════════════════════════════════════╗')
     print(f'║         hostess — 极简 AI 编码助手           ║')
     print(f'╠══════════════════════════════════════════════╣')
-    print(f'║  API: {API_BASE_URL:<38}║')
-    print(f'║  模型: {MODEL:<37}║')
+    print(f'║  API: {api_base_url:<38}║')
+    print(f'║  模型: {model:<37}║')
     print(f'║  命令: /help /clear /quit /exit             ║')
     print(f'╚══════════════════════════════════════════════╝')
     print()
@@ -410,12 +398,12 @@ def main() -> None:
     _print_banner()
 
     try:
-        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+        client = OpenAI(base_url=api_base_url, api_key=api_key)
     except Exception as e:
         print(f'初始化 OpenAI 客户端失败：{e}')
         return
 
-    messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
+    messages = [{'role': 'system', 'content': system_prompt}]
 
     while True:
         try:
@@ -432,7 +420,7 @@ def main() -> None:
             break
 
         if user_input == '/c':
-            messages = [{'role': 'system', 'content': SYSTEM_PROMPT}]
+            messages = [{'role': 'system', 'content': system_prompt}]
             print('对话已重置。')
             continue
 
