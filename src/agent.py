@@ -1,12 +1,14 @@
 import os
 import glob as _glob
-import json
 import re
 import subprocess
 from pathlib import Path
 
 from dotenv import load_dotenv
+from typing import Literal
+
 from openai import OpenAI
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -32,7 +34,25 @@ system_prompt = (
     '## 注意事项\n'
     '- 写文件前先读文件，确保理解准确再动笔\n'
     '- 不要无理由地改变与任务无关的代码\n'
-    '- shell 命令无沙箱限制，注意安全性'
+    '- shell 命令无沙箱限制，注意安全性\n'
+    '\n'
+    '## 可用工具\n'
+    '1. read — 读取文件内容，带行号\n'
+    '   参数：file_path(必填), offset(可选，起始行号), limit(可选，最大行数)\n'
+    '2. write — 写入文件，自动创建父目录\n'
+    '   参数：file_path(必填), content(必填，完整内容)\n'
+    '3. glob — 按 glob 模式匹配文件列表，支持 ** 递归\n'
+    '   参数：pattern(必填), path(可选，默认当前目录)\n'
+    '4. grep — 搜索文件内容，不区分大小写，最多返回 100 条\n'
+    '   参数：pattern(必填), path(可选), include(可选，文件名过滤)\n'
+    '5. bash — 执行 shell 命令，60 秒超时\n'
+    '   参数：cmd(必填)\n'
+    '\n'
+    '## 输出格式（必须严格遵守）\n'
+    '你每次只能输出一个 JSON 对象，格式如下：\n'
+    '- 需要调工具时：{"action": "tool", "tool": "工具名", "args": {"参数": "值"}}\n'
+    '- 直接回复用户时：{"action": "text", "content": "回复内容"}\n'
+    '注意：一次只能调用一个工具，不要同时调用多个。'
 )
 
 
@@ -168,6 +188,14 @@ def tool_bash(cmd: str) -> str:
         return f'命令执行失败：{e}'
 
 
+# LLM 结构化输出模型（替代原生 function calling）
+class AgentAction(BaseModel):
+    action: Literal['text', 'tool']
+    content: str | None = None      # action=text 时的回复内容
+    tool: str | None = None          # action=tool 时的工具名
+    args: dict | None = None         # action=tool 时的工具参数
+
+
 # 工具注册表
 tool_map = {
     'read': tool_read,
@@ -189,129 +217,6 @@ def _short(args: dict) -> str:
     return ', '.join(items)
 
 
-tools_schema = [
-    {
-        'type': 'function',
-        'function': {
-            'name': 'read',
-            'description': (
-                '读取文件内容，带行号。'
-                'offset 和 limit 都从 1 开始计数。'
-                '读取大文件时务必用 offset/limit 分页。'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'file_path': {
-                        'type': 'string',
-                        'description': '文件路径（绝对或相对）',
-                    },
-                    'offset': {
-                        'type': 'integer',
-                        'description': '起始行号（从1开始），不传则从第1行开始',
-                    },
-                    'limit': {
-                        'type': 'integer',
-                        'description': '最多读取的行数，不传则读到文件末尾',
-                    },
-                },
-                'required': ['file_path'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'write',
-            'description': '将内容写入文件。会自动创建父目录。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'file_path': {
-                        'type': 'string',
-                        'description': '目标文件路径',
-                    },
-                    'content': {
-                        'type': 'string',
-                        'description': '要写入的完整内容',
-                    },
-                },
-                'required': ['file_path', 'content'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'glob',
-            'description': (
-                '按 glob 模式匹配文件列表，按修改时间降序排列。'
-                '支持 ** 递归匹配。常用模式：**/*.py、src/**/*.ts'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'pattern': {
-                        'type': 'string',
-                        'description': 'glob 模式，如 **/*.py',
-                    },
-                    'path': {
-                        'type': 'string',
-                        'description': '搜索根目录，默认当前目录',
-                    },
-                },
-                'required': ['pattern'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'grep',
-            'description': (
-                '在文件中搜索匹配的文本行（不区分大小写），返回 文件:行号:内容。'
-                '大量匹配时自动截断到前 100 条。'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'pattern': {
-                        'type': 'string',
-                        'description': '搜索关键词或正则',
-                    },
-                    'path': {
-                        'type': 'string',
-                        'description': '搜索根目录，默认当前目录',
-                    },
-                    'include': {
-                        'type': 'string',
-                        'description': '文件名过滤，如 *.py 或 .py',
-                    },
-                },
-                'required': ['pattern'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'bash',
-            'description': '执行 shell 命令并返回输出。60 秒超时。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'cmd': {
-                        'type': 'string',
-                        'description': '要执行的命令',
-                    },
-                },
-                'required': ['cmd'],
-            },
-        },
-    },
-]
-
-
 def _agent_loop(client: OpenAI, messages: list) -> None:
     """处理 LLM 的工具调用循环，最多 20 轮。"""
     for _round in range(20):
@@ -319,8 +224,7 @@ def _agent_loop(client: OpenAI, messages: list) -> None:
             resp = client.chat.completions.create(
                 model=model,
                 messages=messages,  # type: ignore[arg-type]
-                tools=tools_schema,  # type: ignore[arg-type]
-                tool_choice='auto',
+                response_format={'type': 'json_object'},  # type: ignore[arg-type]
                 max_tokens=max_tokens,
                 temperature=0.1,
             )
@@ -328,57 +232,44 @@ def _agent_loop(client: OpenAI, messages: list) -> None:
             print(f'\n[API 调用失败] {e}')
             break
 
-        msg = resp.choices[0].message
+        raw = resp.choices[0].message.content or ''
+        messages.append({'role': 'assistant', 'content': raw})
 
-        # 打印文本内容
-        if msg.content:
-            print(f'\n{msg.content}\n')
-
-        # 将 assistant 消息加入历史
-        assistant_msg: dict = {'role': 'assistant', 'content': msg.content or None}
-        if msg.tool_calls:
-            tool_calls = []
-            for tc in msg.tool_calls:
-                tool_call = {
-                    'id': tc.id, 'type': 'function',
-                    'function': {
-                        'name': tc.function.name,
-                        'arguments': tc.function.arguments,
-                    }
-                }
-                tool_calls.append(tool_call)
-            assistant_msg['tool_calls'] = tool_calls
-        messages.append(assistant_msg)
-
-        # 无工具调用 → 本轮结束
-        if not msg.tool_calls:
+        # 解析结构化输出
+        try:
+            action = AgentAction.model_validate_json(raw)
+        except Exception as e:
+            print(f'\n[结构化输出解析失败] {e}')
+            print(f'原始输出: {raw[:500]}')
             break
 
-        # 执行每个工具调用
-        for tc in msg.tool_calls:
-            fn_name = tc.function.name
-            handler = tool_map.get(fn_name)
+        if action.action == 'text':
+            print(f'\n{action.content}\n')
+            break
 
+        # 执行工具
+        fn_name = action.tool
+        fn_args = action.args or {}
+        handler = tool_map.get(fn_name or '')
+
+        print(f'  [{fn_name}({_short(fn_args)})]', end=' ')
+        if handler:
             try:
-                fn_args = json.loads(tc.function.arguments)
-            except json.JSONDecodeError:
-                tool_result = f'参数解析失败：{tc.function.arguments[:200]}'
-            else:
-                print(f'  [{fn_name}({_short(fn_args)})]', end=' ')
-                if handler:
-                    try:
-                        tool_result = handler(**fn_args)
-                    except Exception as e:
-                        tool_result = f'工具执行异常：{e}'
-                else:
-                    tool_result = f'未知工具：{fn_name}'
-                print('')
+                tool_result = handler(**fn_args)
+            except Exception as e:
+                tool_result = f'工具执行异常：{e}'
+        else:
+            tool_result = f'未知工具：{fn_name}'
+        print('')
 
-            messages.append({
-                'role': 'tool',
-                'tool_call_id': tc.id,
-                'content': tool_result[:8000],  # 单次工具结果上限
-            })
+        # 工具结果作为 user 消息返回（无原生 tool 角色）
+        messages.append({
+            'role': 'user',
+            'content': (
+                f'工具 [{fn_name}] 执行结果：\n'
+                f'{tool_result[:8000]}'
+            ),
+        })
     else:
         print('(已达到最大工具调用轮数，停止)')
 
