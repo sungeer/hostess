@@ -190,7 +190,7 @@ def tool_bash(cmd: str) -> str:
 
 # LLM 结构化输出模型（替代原生 function calling）
 class AgentAction(BaseModel):
-    action: Literal['text', 'tool']
+    action: Literal['text', 'tool', 'bash', 'file_path']
     content: str | None = None      # action=text 时的回复内容
     tool: str | None = None          # action=tool 时的工具名
     args: dict | None = None         # action=tool 时的工具参数
@@ -275,10 +275,8 @@ def _agent_loop(client: OpenAI, messages: list) -> None:
 
 
 def _print_banner() -> None:
-    print('* Hostess Code v26.0601.0629')
-    print(f'* {model} · API Usage Billing')
-    print(f'* /help /clear /quit /exit')
-    print()
+    print('Code CLI (type /help /clear /quit /exit for available commands)')
+    print('-----------------------------------------------------------------------------')
 
 
 def main() -> None:
@@ -294,7 +292,7 @@ def main() -> None:
 
     while True:
         try:
-            user_input = input('>>> ').strip()
+            user_input = input('\nYou: ').strip()
         except (EOFError, KeyboardInterrupt):
             print('\n再见。')
             break
