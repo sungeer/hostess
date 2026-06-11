@@ -6,6 +6,6 @@ pip install -r requirements.txt
 
 
 
-python -m pip install openai python-dotenv pydantic
+python -m pip install python-dotenv pydantic langchain_openai
 
 
