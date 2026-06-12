@@ -6,7 +6,7 @@ from langchain_core.messages import BaseMessage, ToolMessage
 class ShortTerm:
     """短期记忆，按 token 数控制上限，最大化利用上下文窗口。"""
 
-    def __init__(self, max_tokens: int = 100_000) -> None:
+    def __init__(self, max_tokens: int = 1_000_000) -> None:
         self.max_tokens = max_tokens
         self._messages: list[BaseMessage] = []
 
