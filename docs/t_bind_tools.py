@@ -40,6 +40,6 @@ if response.tool_calls:
     tc = response.tool_calls[0]
     result = add.invoke(tc)
     print(f'\n工具执行结果: {result}')
-    print('\n✅ LLM 支持 bind_tools / function calling')
+    print('\nLLM 支持 bind_tools / function calling')
 else:
-    print('\n❌ LLM 未返回 tool_calls，可能不支持 function calling')
+    print('\nLLM 未返回 tool_calls，可能不支持 function calling')
