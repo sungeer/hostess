@@ -5,10 +5,9 @@
 ## 依赖
 
 - Python 3.10+
-- `openai` SDK
 
 ```bash
-pip install openai
+pip install python-dotenv pydantic langchain_openai
 ```
 
 其余全部使用 Python 标准库。
@@ -18,21 +17,16 @@ pip install openai
 ### 1. 配置环境变量
 
 ```bash
-# Linux / macOS
-export API_BASE_URL=http://your-llm-server:8000/v1
-export API_KEY=your-api-key
-export MODEL=deepseek-chat
-
-# Windows CMD
-set API_BASE_URL=http://your-llm-server:8000/v1
-set API_KEY=your-api-key
-set MODEL=deepseek-chat
+API_BASE_URL=https://api.deepseek.com
+API_KEY=sk-no-key
+MODEL=deepseek-v4-flash
+MAX_TOKENS=65536
 ```
 
 ### 2. 启动
 
 ```bash
-python agent.py
+python src
 ```
 
 ### 3. 使用
