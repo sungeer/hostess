@@ -39,7 +39,11 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
 
     for step in range(max_steps):
         messages = [SystemMessage(content=system_prompt)] + memory.get_messages()
-        response = llm_with_tools.invoke(messages)
+        try:
+            response = llm_with_tools.invoke(messages)
+        except Exception:
+            log.exception('LLM 调用失败，第[%s]轮', step)
+            return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
         memory.add(response)
 
         # if response.content:
@@ -69,6 +73,10 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
 
     messages = [SystemMessage(content=system_prompt)] + memory.get_messages()
     messages.append(HumanMessage(content='请根据已有的工具返回信息，简洁地回答用户的问题。'))
-    response = llm.invoke(messages)
+    try:
+        response = llm.invoke(messages)
+    except Exception:
+        log.exception('LLM 总结调用失败')
+        return '错误：LLM 调用失败，无法生成总结'
     memory.add(response)
     return response.content or ''

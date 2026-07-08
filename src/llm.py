@@ -11,5 +11,5 @@ llm = ChatOpenAI(
     api_key=os.environ.get('API_KEY'),
     extra_body={'thinking': {'type': 'disabled'}},
     temperature=0,
-    timeout=30,
+    timeout=120,
 )
