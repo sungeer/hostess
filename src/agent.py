@@ -30,7 +30,7 @@ system_prompt = textwrap.dedent('''
 ''').strip()
 
 
-def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
+def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
     memory.add({'role': 'user', 'content': user_input})
 
     for step in range(max_steps):
