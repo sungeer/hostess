@@ -7,7 +7,7 @@
 - Python 3.11+
 
 ```bash
-pip install python-dotenv pydantic langchain_openai
+pip install python-dotenv openai loguru
 ```
 
 其余全部使用 Python 标准库。

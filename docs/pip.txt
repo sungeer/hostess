@@ -6,6 +6,6 @@ pip install -r requirements.txt
 
 
 
-python -m pip install python-dotenv openai
+python -m pip install python-dotenv openai loguru
 
 
