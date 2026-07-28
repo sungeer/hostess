@@ -3,7 +3,7 @@ import logging
 import textwrap
 
 from src.llm import client, model_name, common_kwargs
-from src.toolset import TOOLS, TOOLS_MAP
+from src.tools import TOOLS, TOOLS_MAP
 from src.memory import ShortTerm
 
 log = logging.getLogger(__name__)
