@@ -8,7 +8,7 @@ from src.memory import ShortTerm
 
 log = logging.getLogger(__name__)
 
-system_prompt = textwrap.dedent("""
+system_prompt = textwrap.dedent('''
     # 角色
     你是一个在命令行工作的 AI 编码助手。
     
@@ -27,7 +27,7 @@ system_prompt = textwrap.dedent("""
     - 行动前先简要说明当前的理解和下一步计划
     - 写文件前先读文件，确保理解准确再动笔
     - 不要无理由地改变与任务无关的代码
-""").strip()
+''').strip()
 
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
@@ -86,12 +86,18 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
 
     log.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
 
-    messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
-    messages.append({'role': 'user', 'content': '请根据已有的工具返回信息，简洁地回答用户的问题。'})
+    summary_prompt = (
+        '你是一个在命令行工作的 AI 编码助手。'
+        '根据已有信息回答用户，不要客套寒暄，采用最简洁明了的回答。'
+    )
+    final_messages = [{'role': 'system', 'content': summary_prompt}]
+    for msg in memory.get_messages():
+        if msg.get('role') in ('user', 'tool'):
+            final_messages.append(msg)
     try:
         response = client.chat.completions.create(
             model=model_name,
-            messages=messages,
+            messages=final_messages,
             **common_kwargs,
         )
     except Exception:
