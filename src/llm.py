@@ -1,8 +1,11 @@
+import logging
 import os
 
 import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
+
+logging.getLogger('httpx').propagate = False
 
 load_dotenv()
 
