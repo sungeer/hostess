@@ -4,18 +4,7 @@ import subprocess
 import glob as _glob
 from pathlib import Path
 
-from pydantic import BaseModel, Field
-from langchain_core.tools import tool
 
-
-class ReadInput(BaseModel):
-    """read 工具参数"""
-    file_path: str = Field(description='文件路径')
-    offset: int = Field(default=0, description='起始行号，从1开始，0表示从头读取')
-    limit: int = Field(default=0, description='最大行数，0表示读取全部')
-
-
-@tool(args_schema=ReadInput)
 def read(file_path: str, offset: int = 0, limit: int = 0) -> str:
     """读取文件内容，带行号。offset 和 limit 从 1 开始计数。"""
     p = Path(file_path).expanduser().resolve()
@@ -60,13 +49,6 @@ def read(file_path: str, offset: int = 0, limit: int = 0) -> str:
     return hint + header + result
 
 
-class WriteInput(BaseModel):
-    """write 工具参数"""
-    file_path: str = Field(description='文件路径')
-    content: str = Field(description='文件的完整内容')
-
-
-@tool(args_schema=WriteInput)
 def write(file_path: str, content: str) -> str:
     """写入文件，自动创建父目录。"""
     p = Path(file_path).expanduser().resolve()
@@ -78,13 +60,6 @@ def write(file_path: str, content: str) -> str:
         return f'写入失败：{e}'
 
 
-class GlobInput(BaseModel):
-    """glob 工具参数"""
-    pattern: str = Field(description='glob 模式，例如 **/*.py，支持 ** 递归')
-    path: str = Field(default='.', description='搜索目录，默认当前目录')
-
-
-@tool(args_schema=GlobInput)
 def glob(pattern: str, path: str = '.') -> str:
     """按 glob 模式匹配文件列表，支持 ** 递归，按修改时间倒序排列。"""
     root = Path(path).expanduser().resolve()
@@ -108,14 +83,6 @@ def glob(pattern: str, path: str = '.') -> str:
     return '\n'.join(matches[:200])
 
 
-class GrepInput(BaseModel):
-    """grep 工具参数"""
-    pattern: str = Field(description='搜索关键词或正则，不区分大小写')
-    path: str = Field(default='.', description='搜索目录，默认当前目录')
-    include: str = Field(default='', description='文件名过滤，例如 .py')
-
-
-@tool(args_schema=GrepInput)
 def grep(pattern: str, path: str = '.', include: str = '') -> str:
     """纯 Python 递归搜索文件内容，不区分大小写，最多返回 100 条。"""
     root = Path(path).expanduser().resolve()
@@ -148,12 +115,6 @@ def grep(pattern: str, path: str = '.', include: str = '') -> str:
     return '\n'.join(results) if results else '(无匹配)'
 
 
-class BashInput(BaseModel):
-    """bash 工具参数"""
-    cmd: str = Field(description='要执行的 shell 命令')
-
-
-@tool(args_schema=BashInput)
 def bash(cmd: str) -> str:
     """执行 shell 命令，60 秒超时。"""
     try:
@@ -173,6 +134,124 @@ def bash(cmd: str) -> str:
         return f'命令执行失败：{e}'
 
 
-# ── 工具列表 ──────────────────────────────────────────
+TOOLS_MAP = {
+    'read': read,
+    'write': write,
+    'glob': glob,
+    'grep': grep,
+    'bash': bash,
+}
 
-tools = [read, write, glob, grep, bash]
+TOOLS = [
+    {
+        'type': 'function',
+        'function': {
+            'name': 'read',
+            'description': '读取文件内容，带行号。offset 和 limit 从 1 开始计数。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_path': {
+                        'type': 'string',
+                        'description': '文件路径',
+                    },
+                    'offset': {
+                        'type': 'integer',
+                        'description': '起始行号，从1开始，0表示从头读取',
+                        'default': 0,
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': '最大行数，0表示读取全部',
+                        'default': 0,
+                    },
+                },
+                'required': ['file_path'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'write',
+            'description': '写入文件，自动创建父目录。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_path': {
+                        'type': 'string',
+                        'description': '文件路径',
+                    },
+                    'content': {
+                        'type': 'string',
+                        'description': '文件的完整内容',
+                    },
+                },
+                'required': ['file_path', 'content'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'glob',
+            'description': '按 glob 模式匹配文件列表，支持 ** 递归，按修改时间倒序排列。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'pattern': {
+                        'type': 'string',
+                        'description': 'glob 模式，例如 **/*.py，支持 ** 递归',
+                    },
+                    'path': {
+                        'type': 'string',
+                        'description': '搜索目录，默认当前目录',
+                    },
+                },
+                'required': ['pattern'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'grep',
+            'description': '纯 Python 递归搜索文件内容，不区分大小写，最多返回 100 条。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'pattern': {
+                        'type': 'string',
+                        'description': '搜索关键词或正则，不区分大小写',
+                    },
+                    'path': {
+                        'type': 'string',
+                        'description': '搜索目录，默认当前目录',
+                    },
+                    'include': {
+                        'type': 'string',
+                        'description': '文件名过滤，例如 .py',
+                    },
+                },
+                'required': ['pattern'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'bash',
+            'description': '执行 shell 命令，60 秒超时。',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'cmd': {
+                        'type': 'string',
+                        'description': '要执行的 shell 命令',
+                    },
+                },
+                'required': ['cmd'],
+            },
+        },
+    },
+]

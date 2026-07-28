@@ -1,15 +1,23 @@
 import os
 
+import httpx
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from openai import OpenAI
 
 load_dotenv()
 
-llm = ChatOpenAI(
-    model=os.environ.get('MODEL', 'deepseek-v4-flash'),
+model_name = os.environ.get('MODEL', 'deepseek-v4-flash')
+
+http_client = httpx.Client(verify=False)  # 禁用 SSL 证书验证
+
+client = OpenAI(
     base_url=os.environ.get('API_BASE_URL'),
     api_key=os.environ.get('API_KEY'),
-    extra_body={'thinking': {'type': 'disabled'}},
-    temperature=0,
+    http_client=http_client,
     timeout=120,
 )
+
+common_kwargs = {
+    'temperature': 0.0,
+    'extra_body': {'thinking': {'type': 'disabled'}},
+}

@@ -1,9 +1,8 @@
+import json
 import logging
 
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-
-from src.llm import llm
-from src.toolset import tools
+from src.llm import client, model_name, common_kwargs
+from src.toolset import TOOLS, TOOLS_MAP
 from src.memory import ShortTerm
 
 log = logging.getLogger(__name__)
@@ -28,55 +27,75 @@ system_prompt = (
     '- 不要无理由地改变与任务无关的代码\n'
 )
 
-tools_map = {t.name: t for t in tools}
-
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
-    """bind_tools 模式的 agent 循环，支持边说边调、并行工具调用。"""
-    memory.add(HumanMessage(content=user_input))
-
-    llm_with_tools = llm.bind_tools(tools)
+    """OpenAI 原生 tools 模式的 agent 循环，支持边说边调、并行工具调用。"""
+    memory.add({'role': 'user', 'content': user_input})
 
     for step in range(max_steps):
-        messages = [SystemMessage(content=system_prompt)] + memory.get_messages()
+        messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
         try:
-            response = llm_with_tools.invoke(messages)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                tools=TOOLS,
+                **common_kwargs,
+            )
         except Exception:
             log.exception('LLM 调用失败，第[%s]轮', step)
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
-        memory.add(response)
+        response_msg = response.choices[0].message.to_dict()
+        memory.add(response_msg)
 
-        # if response.content:
-        #     log.info(f'[thought] {response.content[:200]}')
-
-        if not response.tool_calls:
+        tool_calls = response_msg.get('tool_calls')
+        if not tool_calls:
             log.info(f'无需工具调用，第[{step}]轮结束')
-            return response.content or ''
+            return response_msg.get('content') or ''
 
         log.info(f'工具调用第[{step + 1}]轮')
 
-        for tc in response.tool_calls:
-            tool_func = tools_map.get(tc['name'])
+        for tc in tool_calls:
+            func_name = tc['function']['name']
+            tool_func = TOOLS_MAP.get(func_name)
             if tool_func is None:
-                log.warning(f'未知工具: {tc["name"]}')
+                log.warning(f'未知工具: {func_name}')
                 continue
 
-            log.info(f'执行工具: {tc["name"]}，参数: {tc["args"]}')
+            try:
+                func_args = json.loads(tc['function']['arguments'])
+            except json.JSONDecodeError:
+                log.warning(f'工具参数解析失败: {tc["function"]["arguments"]}')
+                continue
 
-            result = tool_func.invoke(tc)
+            log.info(f'执行工具: {func_name}，参数: {func_args}')
+
+            try:
+                result = tool_func(**func_args)
+            except Exception:
+                log.exception(f'工具执行失败: {func_name}')
+                result = f'工具执行失败: {func_name}'
 
             log.info(f'工具结果: {str(result)[:100]}')
 
-            memory.add(ToolMessage(content=str(result), tool_call_id=tc['id']))
+            memory.add({
+                'role': 'tool',
+                'tool_call_id': tc['id'],
+                'content': str(result),
+            })
 
     log.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
 
-    messages = [SystemMessage(content=system_prompt)] + memory.get_messages()
-    messages.append(HumanMessage(content='请根据已有的工具返回信息，简洁地回答用户的问题。'))
+    messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
+    messages.append({'role': 'user', 'content': '请根据已有的工具返回信息，简洁地回答用户的问题。'})
     try:
-        response = llm.invoke(messages)
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            **common_kwargs,
+        )
     except Exception:
         log.exception('LLM 总结调用失败')
         return '错误：LLM 调用失败，无法生成总结'
-    memory.add(response)
-    return response.content or ''
+    response_msg = response.choices[0].message.to_dict()
+    memory.add(response_msg)
+    return response_msg.get('content') or ''
