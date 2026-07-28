@@ -29,7 +29,6 @@ system_prompt = (
 
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 20) -> str:
-    """OpenAI 原生 tools 模式的 agent 循环，支持边说边调、并行工具调用。"""
     memory.add({'role': 'user', 'content': user_input})
 
     for step in range(max_steps):
