@@ -1,12 +1,11 @@
 import json
-import logging
 import textwrap
+
+from loguru import logger
 
 from src.llm import client, model_name, common_kwargs
 from src.tools import TOOLS, TOOLS_MAP
 from src.memory import ShortTerm
-
-log = logging.getLogger(__name__)
 
 system_prompt = textwrap.dedent('''
     # 角色
@@ -43,40 +42,40 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
                 **common_kwargs,
             )
         except Exception:
-            log.exception('LLM 调用失败，第[%s]轮', step)
+            logger.exception('LLM 调用失败，第[%s]轮', step)
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
         response_msg = response.choices[0].message.to_dict()
         memory.add(response_msg)
 
         tool_calls = response_msg.get('tool_calls')
         if not tool_calls:
-            log.info(f'无需工具调用，第[{step}]轮结束')
+            logger.info(f'无需工具调用，第[{step}]轮结束')
             return response_msg.get('content') or ''
 
-        log.info(f'工具调用第[{step + 1}]轮')
+        logger.info(f'工具调用第[{step + 1}]轮')
 
         for tc in tool_calls:
             func_name = tc['function']['name']
             tool_func = TOOLS_MAP.get(func_name)
             if tool_func is None:
-                log.warning(f'未知工具: {func_name}')
+                logger.warning(f'未知工具: {func_name}')
                 continue
 
             try:
                 func_args = json.loads(tc['function']['arguments'])
             except json.JSONDecodeError:
-                log.warning(f'工具参数解析失败: {tc["function"]["arguments"]}')
+                logger.warning(f'工具参数解析失败: {tc["function"]["arguments"]}')
                 continue
 
-            log.info(f'执行工具: {func_name}，参数: {func_args}')
+            logger.info(f'执行工具: {func_name}，参数: {func_args}')
 
             try:
                 result = tool_func(**func_args)
             except Exception:
-                log.exception(f'工具执行失败: {func_name}')
+                logger.exception(f'工具执行失败: {func_name}')
                 result = f'工具执行失败: {func_name}'
 
-            log.info(f'工具结果: {str(result)[:100]}')
+            logger.info(f'工具结果: {str(result)[:100]}')
 
             memory.add({
                 'role': 'tool',
@@ -84,7 +83,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
                 'content': str(result),
             })
 
-    log.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
+    logger.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
 
     summary_prompt = (
         '你是一个在命令行工作的 AI 编码助手。'
@@ -101,7 +100,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
             **common_kwargs,
         )
     except Exception:
-        log.exception('LLM 总结调用失败')
+        logger.exception('LLM 总结调用失败')
         return '错误：LLM 调用失败，无法生成总结'
     response_msg = response.choices[0].message.to_dict()
     memory.add(response_msg)
