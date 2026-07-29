@@ -60,33 +60,38 @@ python src
 
 ## 可用工具
 
-Agent 拥有 5 个工具，由 LLM 自动选择调用：
+Agent 拥有 7 个工具（完全对齐 pi-agent），由 LLM 自动选择调用：
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
-| `read` | 读取文件内容（带行号） | `file_path`, `offset`, `limit` |
-| `write` | 写入文件（自动建目录） | `file_path`, `content` |
-| `glob` | 文件模式匹配 | `pattern`, `path` |
-| `grep` | 递归搜索文件内容 | `pattern`, `path`, `include` |
-| `bash` | 执行 shell 命令 | `cmd` |
+| `read` | 读取文件内容（带行号，可分页） | `path`, `offset`, `limit` |
+| `write` | 创建或覆写文件（自动建目录） | `path`, `content` |
+| `edit` | 精确字符串替换（支持多 edit） | `path`, `edits` |
+| `bash` | 执行 shell 命令 | `command`, `timeout` |
+| `grep` | 搜索文件内容（正则/字面量） | `pattern`, `path`, `glob`, `ignoreCase`, `literal`, `context`, `limit` |
+| `find` | 按 glob 模式查找文件 | `pattern`, `path`, `limit` |
+| `ls` | 列出目录内容 | `path`, `limit` |
 
 ### 工具示例
 
 ```
-read('src/main.py', offset=10, limit=30)    → 从第10行开始读30行
-write('docs/api.md', '# API 文档\n...')      → 写入文件
-glob('src/**/*.py')                          → 递归匹配所有 .py 文件
-grep('@route', include='*.py')              → 搜索路由定义
-bash('git log --oneline -5')                 → 执行 git 命令
+read('src/main.py', offset=10, limit=30)         → 从第10行开始读30行
+write('docs/api.md', '# API 文档\n...')           → 写入文件
+edit('src/app.py', [{'oldText': 'foo', 'newText': 'bar'}])  → 精确替换
+bash('git log --oneline -5', timeout=30)          → 执行 git 命令，30秒超时
+grep('@route', glob='*.py', context=2)            → 搜索路由定义，带2行上下文
+find('src/**/*.py')                                → 递归匹配所有 .py 文件
+ls('src/', limit=100)                              → 列出 src 目录前100条
 ```
 
 ## 工作流程
 
 1. **理解需求** — 先理解用户想做什么，不清楚时主动提问
-2. **探索** — 用 `glob` 了解项目文件结构
+2. **探索** — 用 `find` 了解项目文件结构
 3. **搜索** — 用 `grep` 查找关键代码
 4. **阅读** — 用 `read` 仔细阅读相关文件（大文件分页读）
-5. **执行** — 用 `write` 修改代码，或用 `bash` 执行命令
+5. **编辑** — 用小范围 `edit` 做精确修改；全新文件用 `write`
+6. **执行** — 用 `bash` 执行测试、构建、git 等命令
 
 ## 适用场景
 
