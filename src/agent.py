@@ -54,25 +54,78 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
 
     for step in range(max_steps):
         messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
+
+        # ── 流式调用 LLM ──
         try:
-            response = client.chat.completions.create(
+            stream = client.chat.completions.create(
                 model=model_name,
                 messages=messages,
                 tools=TOOLS,
+                stream=True,
                 **common_kwargs,
             )
         except Exception:
             logger.exception('LLM 调用失败，第[%s]轮', step)
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
-        response_msg = response.choices[0].message.to_dict()
+
+        # 累积流式响应
+        content_parts: list[str] = []
+        tool_calls_map: dict[int, dict] = {}
+        first_token = True
+
+        try:
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+
+                # 文本内容实时打印
+                if delta.content:
+                    if first_token:
+                        print('Agent: ', end='', flush=True)
+                        first_token = False
+                    content_parts.append(delta.content)
+                    print(delta.content, end='', flush=True)
+
+                # 工具调用增量累积
+                if delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tool_calls_map:
+                            tool_calls_map[idx] = {
+                                'id': '',
+                                'type': 'function',
+                                'function': {'name': '', 'arguments': ''},
+                            }
+                        entry = tool_calls_map[idx]
+                        if tc_delta.id:
+                            entry['id'] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                entry['function']['name'] = tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                entry['function']['arguments'] += tc_delta.function.arguments
+        except Exception:
+            logger.exception('流式响应中断，第[%s]轮', step)
+            return f'错误：LLM 流式响应中断（第{step}轮），请检查网络连接'
+
+        content = ''.join(content_parts)
+        tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())]
+
+        # 构建响应消息
+        response_msg: dict = {'role': 'assistant', 'content': content or None}
+        if tool_calls:
+            response_msg['tool_calls'] = tool_calls
         memory.add(response_msg)
 
-        tool_calls = response_msg.get('tool_calls')
+        # 无工具调用 → 结束
         if not tool_calls:
+            print()  # 末尾换行
             logger.info(f'无需工具调用，第[{step}]轮结束')
-            return response_msg.get('content') or ''
+            return content or ''
 
-        logger.info(f'工具调用第[{step + 1}]轮')
+        # 有工具调用 → 显示并执行
+        print()  # 工具调用前换行
+        tool_names = [tc['function']['name'] for tc in tool_calls]
+        logger.info(f'工具调用第[{step + 1}]轮: {tool_names}')
 
         for tc in tool_calls:
             func_name = tc['function']['name']
@@ -87,7 +140,9 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
                 logger.warning(f'工具参数解析失败: {tc["function"]["arguments"]}')
                 continue
 
-            logger.info(f'执行工具: {func_name}，参数: {func_args}')
+            # 打印工具调用摘要
+            args_brief = ', '.join(f'{k}={repr(v)[:40]}' for k, v in func_args.items())
+            print(f'  [{func_name}] {args_brief}')
 
             try:
                 result = tool_func(**func_args)
