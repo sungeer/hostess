@@ -30,7 +30,6 @@ def main() -> None:
             print('Memory cleared. New conversation started.')
             continue
 
-        # 流式模式下内容已实时打印，仅错误和空响应需要补打
         result = run_agent(user_input, memory)
-        if not result or result.startswith('错误'):
-            print(f'Agent: {result}')
+
+        print(f'Agent: {result}')
