@@ -22,5 +22,7 @@ client = OpenAI(
 
 common_kwargs = {
     'temperature': 0.0,
-    'extra_body': {'thinking': {'type': 'disabled'}},
+    'extra_body': {
+        'thinking': {'type': 'disabled'}
+    },
 }
