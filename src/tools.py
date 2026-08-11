@@ -165,7 +165,7 @@ def grep(
     pattern: str,
     path: str = '.',
     glob: str = '',
-    ignoreCase: bool = False,
+    ignore_case: bool = False,
     literal: bool = False,
     context: int = 0,
     limit: int = 100,
@@ -184,14 +184,14 @@ def grep(
         pass
     else:
         try:
-            flags = re.IGNORECASE if ignoreCase else 0
+            flags = re.IGNORECASE if ignore_case else 0
             compiled = re.compile(pattern, flags)
         except re.error as e:
             return f'正则错误：{e}'
 
     def match_line(line_text: str) -> bool:
         if literal:
-            if ignoreCase:
+            if ignore_case:
                 return pattern.lower() in line_text.lower()
             return pattern in line_text
         return bool(compiled.search(line_text))
@@ -441,7 +441,7 @@ TOOLS = [
                         'type': 'string',
                         'description': '按 glob 过滤文件，例如 *.py 或 **/*.spec.ts',
                     },
-                    'ignoreCase': {
+                    'ignore_case': {
                         'type': 'boolean',
                         'description': '不区分大小写搜索（默认 false）',
                     },
