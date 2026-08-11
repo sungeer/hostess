@@ -112,10 +112,13 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         '你是一个在命令行工作的 AI 编码助手。'
         '根据已有信息回答用户，不要客套寒暄，采用最简洁明了的回答。'
     )
+
     final_messages = [{'role': 'system', 'content': summary_prompt}]
+
     for msg in memory.get_messages():
         if msg.get('role') in ('user', 'tool'):
             final_messages.append(msg)
+
     try:
         response = client.chat.completions.create(
             model=model_name,
