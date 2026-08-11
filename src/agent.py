@@ -54,6 +54,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
 
     for step in range(max_steps):
         messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
+
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -64,7 +65,9 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         except Exception:
             logger.exception('LLM 调用失败，第[%s]轮', step)
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
+
         response_msg = response.choices[0].message.to_dict()
+
         memory.add(response_msg)
 
         tool_calls = response_msg.get('tool_calls')
@@ -122,6 +125,9 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
     except Exception:
         logger.exception('LLM 总结调用失败')
         return '错误：LLM 调用失败，无法生成总结'
+
     response_msg = response.choices[0].message.to_dict()
+
     memory.add(response_msg)
+
     return response_msg.get('content') or ''
