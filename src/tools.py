@@ -4,8 +4,6 @@ import subprocess
 from pathlib import Path
 
 
-# ── read ──────────────────────────────────────────────────────────
-
 def read(path: str, offset: int = 0, limit: int = 0) -> str:
     """读取文件内容。支持文本文件。用 offset/limit 分页读取大文件。"""
     p = Path(path).expanduser().resolve()
@@ -50,8 +48,6 @@ def read(path: str, offset: int = 0, limit: int = 0) -> str:
     return hint + header + result
 
 
-# ── write ─────────────────────────────────────────────────────────
-
 def write(path: str, content: str) -> str:
     """写入文件，自动创建父目录。创建或覆盖文件。"""
     p = Path(path).expanduser().resolve()
@@ -62,8 +58,6 @@ def write(path: str, content: str) -> str:
     except OSError as e:
         return f'写入失败：{e}'
 
-
-# ── edit ──────────────────────────────────────────────────────────
 
 def edit(path: str, edits: list[dict]) -> str:
     """对单个文件进行精确字符串替换。
@@ -147,8 +141,6 @@ def edit(path: str, edits: list[dict]) -> str:
         return f'写入失败：{e}'
 
 
-# ── bash ──────────────────────────────────────────────────────────
-
 def bash(command: str, timeout: int = 0) -> str:
     """执行 shell 命令。可指定超时秒数（0 表示默认 120 秒）。"""
     timeout_sec = float(timeout) if timeout > 0 else 120.0
@@ -168,8 +160,6 @@ def bash(command: str, timeout: int = 0) -> str:
     except OSError as e:
         return f'命令执行失败：{e}'
 
-
-# ── grep ──────────────────────────────────────────────────────────
 
 def grep(
     pattern: str,
@@ -255,8 +245,6 @@ def grep(
     return '\n'.join(results) if results else '(无匹配)'
 
 
-# ── find ──────────────────────────────────────────────────────────
-
 def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     """按 glob 模式匹配文件，支持 ** 递归。返回相对于搜索目录的文件路径。"""
     root = Path(path).expanduser().resolve()
@@ -288,8 +276,6 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     return out
 
 
-# ── ls ────────────────────────────────────────────────────────────
-
 def ls(path: str = '.', limit: int = 500) -> str:
     """列出目录内容。按字母排序，目录带 '/' 后缀。包含隐藏文件。"""
     p = Path(path).expanduser().resolve()
@@ -318,8 +304,6 @@ def ls(path: str = '.', limit: int = 500) -> str:
 
     return '\n'.join(results)
 
-
-# ── 工具注册表 ─────────────────────────────────────────────────────
 
 TOOLS_MAP = {
     'read': read,
