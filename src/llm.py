@@ -21,6 +21,6 @@ llm = ChatOpenAI(
         'thinking': {'type': 'disabled'}
     },
     temperature=0.0,
-    timeout=120,
+    timeout=300,
     http_socket_options=(),  # 关闭 TCP Keep-Alive 的自定义配置
 )
