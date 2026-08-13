@@ -1,11 +1,8 @@
-import logging
 import os
 
 import httpx
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-
-logging.getLogger('httpx').propagate = False
 
 load_dotenv()
 
