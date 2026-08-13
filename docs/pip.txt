@@ -5,7 +5,6 @@ pip freeze > requirements.txt
 pip install -r requirements.txt
 
 
-
-python -m pip install python-dotenv openai loguru
+python -m pip install langchain-openai python-dotenv loguru
 
 

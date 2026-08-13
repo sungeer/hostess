@@ -1,10 +1,10 @@
-import json
 import textwrap
 
 from loguru import logger
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from src.llm import client, model_name, common_kwargs
-from src.tools import TOOLS, TOOLS_MAP
+from src.llm import llm
+from src.tools import TOOLS
 from src.memory import ShortTerm
 
 system_prompt = textwrap.dedent('''
@@ -50,61 +50,48 @@ system_prompt = textwrap.dedent('''
 
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
-    memory.add({'role': 'user', 'content': user_input})
+    memory.add(HumanMessage(content=user_input))
+
+    tools_map = {t.name: t for t in TOOLS}
 
     for step in range(max_steps):
-        messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
+        messages = [SystemMessage(system_prompt)] + memory.get_messages()
 
         try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                tools=TOOLS,
-                **common_kwargs,
-            )
+            response = llm.bind_tools(TOOLS).invoke(messages)
         except Exception:
             logger.exception('LLM 调用失败，第[%s]轮', step)
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
 
-        response_msg = response.choices[0].message.to_dict()
+        memory.add(response)
 
-        memory.add(response_msg)
-
-        tool_calls = response_msg.get('tool_calls')
-        if not tool_calls:
+        if not response.tool_calls:
             logger.info(f'无需工具调用，第[{step}]轮结束')
-            return response_msg.get('content') or ''
+            return response.content or ''
 
         logger.info(f'工具调用第[{step + 1}]轮')
 
-        for tc in tool_calls:
-            func_name = tc['function']['name']
-            tool_func = TOOLS_MAP.get(func_name)
+        for tc in response.tool_calls:
+            func_name = tc['name']
+            tool_func = tools_map.get(func_name)
             if tool_func is None:
                 logger.warning(f'未知工具: {func_name}')
                 continue
 
-            try:
-                func_args = json.loads(tc['function']['arguments'])
-            except json.JSONDecodeError:
-                logger.warning(f'工具参数解析失败: {tc["function"]["arguments"]}')
-                continue
-
-            logger.info(f'执行工具: {func_name}，参数: {func_args}')
+            logger.info(f'执行工具: {func_name}，参数: {tc["args"]}')
 
             try:
-                result = tool_func(**func_args)
+                result = tool_func.invoke(tc)
             except Exception:
                 logger.exception(f'工具执行失败: {func_name}')
-                result = f'工具执行失败: {func_name}'
+                result = ToolMessage(
+                    content=f'工具执行失败: {func_name}',
+                    tool_call_id=tc['id'],
+                )
 
-            logger.info(f'工具结果: {str(result)[:100]}')
+            logger.info(f'工具结果: {str(result.content)[:100]}')
 
-            memory.add({
-                'role': 'tool',
-                'tool_call_id': tc['id'],
-                'content': str(result),
-            })
+            memory.add(result)
 
     logger.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
 
@@ -113,24 +100,18 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         '根据已有信息回答用户，不要客套寒暄，采用最简洁明了的回答。'
     )
 
-    final_messages = [{'role': 'system', 'content': summary_prompt}]
+    final_messages = [SystemMessage(summary_prompt)]
 
     for msg in memory.get_messages():
-        if msg.get('role') in ('user', 'tool'):
-            final_messages.append(msg)
+        if isinstance(msg, (HumanMessage, ToolMessage)):
+            final_messages.append(msg)  # type: ignore[misc]
 
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=final_messages,
-            **common_kwargs,
-        )
+        response = llm.invoke(final_messages)
     except Exception:
         logger.exception('LLM 总结调用失败')
         return '错误：LLM 调用失败，无法生成总结'
 
-    response_msg = response.choices[0].message.to_dict()
+    memory.add(response)
 
-    memory.add(response_msg)
-
-    return response_msg.get('content') or ''
+    return response.content or ''

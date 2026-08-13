@@ -3,9 +3,60 @@ import re
 import subprocess
 from pathlib import Path
 
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
+
+class ReadInput(BaseModel):
+    path: str = Field(description='要读取的文件路径（相对或绝对）')
+    offset: int = Field(default=0, description='起始行号，从1开始，0表示从头读取')
+    limit: int = Field(default=0, description='最大读取行数，0表示读取全部')
+
+
+class WriteInput(BaseModel):
+    path: str = Field(description='要写入的文件路径（相对或绝对）')
+    content: str = Field(description='要写入文件的完整内容')
+
+
+class EditInput(BaseModel):
+    path: str = Field(description='要编辑的文件路径（相对或绝对）')
+    edits: list[dict] = Field(
+        description='一个或多个精确替换，每项为 {"oldText": ..., "newText": ...}。切勿包含重叠或嵌套的 edit。',
+    )
+
+
+class BashInput(BaseModel):
+    command: str = Field(description='要执行的 shell 命令')
+    timeout: int = Field(default=0, description='超时秒数（可选，默认 120 秒）')
+
+
+class GrepInput(BaseModel):
+    pattern: str = Field(description='搜索模式（正则或字面量字符串）')
+    path: str = Field(default='.', description='搜索目录或文件（默认当前目录）')
+    glob: str = Field(default='', description='按 glob 过滤文件，例如 *.py 或 **/*.spec.ts')
+    ignore_case: bool = Field(default=False, description='不区分大小写搜索（默认 false）')
+    literal: bool = Field(default=False, description='将 pattern 视为字面量字符串而非正则（默认 false）')
+    context: int = Field(default=0, description='每条匹配前后显示的行数（默认 0）')
+    limit: int = Field(default=100, description='最大返回匹配数（默认 100）')
+
+
+class FindInput(BaseModel):
+    pattern: str = Field(description='Glob 模式，例如 *.ts、**/*.json 或 src/**/*.spec.ts')
+    path: str = Field(default='.', description='搜索目录（默认当前目录）')
+    limit: int = Field(default=1000, description='最大返回结果数（默认 1000）')
+
+
+class LsInput(BaseModel):
+    path: str = Field(default='.', description='要列出的目录（默认当前目录）')
+    limit: int = Field(default=500, description='最大返回条目数（默认 500）')
+
+
+@tool(args_schema=ReadInput)
 def read(path: str, offset: int = 0, limit: int = 0) -> str:
-    """读取文件内容。支持文本文件。用 offset/limit 分页读取大文件。"""
+    """读取文件内容。
+    支持文本文件。
+    用 offset/limit 分页读取大文件。
+    """
     p = Path(path).expanduser().resolve()
     if not p.exists():
         return f'错误：文件不存在 — {p}'
@@ -48,8 +99,12 @@ def read(path: str, offset: int = 0, limit: int = 0) -> str:
     return hint + header + result
 
 
+@tool(args_schema=WriteInput)
 def write(path: str, content: str) -> str:
-    """写入文件，自动创建父目录。创建或覆盖文件。"""
+    """写入文件。
+    文件不存在则创建，存在则覆盖。
+    自动创建父目录。
+    """
     p = Path(path).expanduser().resolve()
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -59,10 +114,12 @@ def write(path: str, content: str) -> str:
         return f'写入失败：{e}'
 
 
+@tool(args_schema=EditInput)
 def edit(path: str, edits: list[dict]) -> str:
     """对单个文件进行精确字符串替换。
-    每个 edits[].oldText 必须在原文件中唯一且不与其他 edit 重叠。
-    所有 edit 都基于原始文件匹配（非增量应用）。
+    edits[].oldText 必须在原文件中唯一，且不能重叠。
+    所有编辑基于原始文件匹配（非增量应用）。
+    多个不连续的修改请放在一次 edit 调用的多个 edits[] 中。
     """
     p = Path(path).expanduser().resolve()
     if not p.exists():
@@ -141,8 +198,12 @@ def edit(path: str, edits: list[dict]) -> str:
         return f'写入失败：{e}'
 
 
+@tool(args_schema=BashInput)
 def bash(command: str, timeout: int = 0) -> str:
-    """执行 shell 命令。可指定超时秒数（0 表示默认 120 秒）。"""
+    """在当前工作目录执行 shell 命令。
+    返回 stdout 和 stderr。
+    可指定超时秒数。
+    """
     timeout_sec = float(timeout) if timeout > 0 else 120.0
     try:
         r = subprocess.run(
@@ -161,6 +222,7 @@ def bash(command: str, timeout: int = 0) -> str:
         return f'命令执行失败：{e}'
 
 
+@tool(args_schema=GrepInput)
 def grep(
     pattern: str,
     path: str = '.',
@@ -170,7 +232,11 @@ def grep(
     context: int = 0,
     limit: int = 100,
 ) -> str:
-    """搜索文件内容。返回带文件路径和行号的匹配行。每行长行截断至 200 字符。"""
+    """搜索文件内容。
+    返回带文件路径和行号的匹配行。
+    跳过隐藏目录。
+    默认最多返回 100 条匹配。
+    """
     root = Path(path).expanduser().resolve()
     if not root.exists():
         return f'错误：路径不存在 — {root}'
@@ -245,8 +311,13 @@ def grep(
     return '\n'.join(results) if results else '(无匹配)'
 
 
+@tool(args_schema=FindInput)
 def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
-    """按 glob 模式匹配文件，支持 ** 递归。返回相对于搜索目录的文件路径。"""
+    """按 glob 模式搜索文件。
+    返回相对于搜索目录的文件路径。
+    跳过隐藏目录。
+    默认最多返回 1000 条结果。
+    """
     root = Path(path).expanduser().resolve()
     if not root.exists():
         return f'错误：路径不存在 — {root}'
@@ -276,8 +347,13 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     return out
 
 
+@tool(args_schema=LsInput)
 def ls(path: str = '.', limit: int = 500) -> str:
-    """列出目录内容。按字母排序，目录带 '/' 后缀。包含隐藏文件。"""
+    """列出目录内容。
+    按字母排序，目录带 / 后缀。
+    包含隐藏文件。
+    默认最多返回 500 条。
+    """
     p = Path(path).expanduser().resolve()
     if not p.exists():
         return f'错误：路径不存在 — {p}'
@@ -305,207 +381,4 @@ def ls(path: str = '.', limit: int = 500) -> str:
     return '\n'.join(results)
 
 
-TOOLS_MAP = {
-    'read': read,
-    'write': write,
-    'edit': edit,
-    'bash': bash,
-    'grep': grep,
-    'find': find,
-    'ls': ls,
-}
-
-TOOLS = [
-    {
-        'type': 'function',
-        'function': {
-            'name': 'read',
-            'description': '读取文件内容。支持文本文件。用 offset/limit 分页读取大文件。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'path': {
-                        'type': 'string',
-                        'description': '要读取的文件路径（相对或绝对）',
-                    },
-                    'offset': {
-                        'type': 'integer',
-                        'description': '起始行号，从1开始，0表示从头读取',
-                        'default': 0,
-                    },
-                    'limit': {
-                        'type': 'integer',
-                        'description': '最大读取行数，0表示读取全部',
-                        'default': 0,
-                    },
-                },
-                'required': ['path'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'write',
-            'description': '写入文件。文件不存在则创建，存在则覆盖。自动创建父目录。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'path': {
-                        'type': 'string',
-                        'description': '要写入的文件路径（相对或绝对）',
-                    },
-                    'content': {
-                        'type': 'string',
-                        'description': '要写入文件的完整内容',
-                    },
-                },
-                'required': ['path', 'content'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'edit',
-            'description': '对单个文件进行精确字符串替换。edits[].oldText 必须在原文件中唯一，且不能重叠。所有编辑基于原始文件匹配（非增量应用）。多个不连续的修改请放在一次 edit 调用的多个 edits[] 中。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'path': {
-                        'type': 'string',
-                        'description': '要编辑的文件路径（相对或绝对）',
-                    },
-                    'edits': {
-                        'type': 'array',
-                        'description': '一个或多个精确替换。每个 edit 都有 oldText 和 newText。切勿包含重叠或嵌套的 edit。',
-                        'items': {
-                            'type': 'object',
-                            'properties': {
-                                'oldText': {
-                                    'type': 'string',
-                                    'description': '要精确匹配的原文本，必须在文件中唯一',
-                                },
-                                'newText': {
-                                    'type': 'string',
-                                    'description': '替换后的新文本',
-                                },
-                            },
-                            'required': ['oldText', 'newText'],
-                        },
-                    },
-                },
-                'required': ['path', 'edits'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'bash',
-            'description': '在当前工作目录执行 shell 命令。返回 stdout 和 stderr。可指定超时秒数。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'command': {
-                        'type': 'string',
-                        'description': '要执行的 shell 命令',
-                    },
-                    'timeout': {
-                        'type': 'integer',
-                        'description': '超时秒数（可选，默认 120 秒）',
-                        'default': 0,
-                    },
-                },
-                'required': ['command'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'grep',
-            'description': '搜索文件内容。返回带文件路径和行号的匹配行。尊重 .gitignore。默认最多返回 100 条匹配。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'pattern': {
-                        'type': 'string',
-                        'description': '搜索模式（正则或字面量字符串）',
-                    },
-                    'path': {
-                        'type': 'string',
-                        'description': '搜索目录或文件（默认当前目录）',
-                    },
-                    'glob': {
-                        'type': 'string',
-                        'description': '按 glob 过滤文件，例如 *.py 或 **/*.spec.ts',
-                    },
-                    'ignore_case': {
-                        'type': 'boolean',
-                        'description': '不区分大小写搜索（默认 false）',
-                    },
-                    'literal': {
-                        'type': 'boolean',
-                        'description': '将 pattern 视为字面量字符串而非正则（默认 false）',
-                    },
-                    'context': {
-                        'type': 'integer',
-                        'description': '每条匹配前后显示的行数（默认 0）',
-                    },
-                    'limit': {
-                        'type': 'integer',
-                        'description': '最大返回匹配数（默认 100）',
-                    },
-                },
-                'required': ['pattern'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'find',
-            'description': '按 glob 模式搜索文件。返回相对于搜索目录的文件路径。尊重 .gitignore。默认最多返回 1000 条结果。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'pattern': {
-                        'type': 'string',
-                        'description': 'Glob 模式，例如 *.ts、**/*.json 或 src/**/*.spec.ts',
-                    },
-                    'path': {
-                        'type': 'string',
-                        'description': '搜索目录（默认当前目录）',
-                    },
-                    'limit': {
-                        'type': 'integer',
-                        'description': '最大返回结果数（默认 1000）',
-                    },
-                },
-                'required': ['pattern'],
-            },
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'ls',
-            'description': '列出目录内容。按字母排序，目录带 / 后缀。包含隐藏文件。默认最多返回 500 条。',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'path': {
-                        'type': 'string',
-                        'description': '要列出的目录（默认当前目录）',
-                    },
-                    'limit': {
-                        'type': 'integer',
-                        'description': '最大返回条目数（默认 500）',
-                    },
-                },
-                'required': [],
-            },
-        },
-    },
-]
+TOOLS = [read, write, edit, bash, grep, find, ls]
