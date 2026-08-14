@@ -54,13 +54,13 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
 
     tools_map = {t.name: t for t in TOOLS}
 
-    for step in range(max_steps):
+    for step in range(1, max_steps + 1):
         messages = [SystemMessage(system_prompt)] + memory.get_messages()
 
         try:
             response = llm.bind_tools(TOOLS).invoke(messages)
         except Exception:
-            logger.exception('LLM 调用失败，第[%s]轮', step)
+            logger.exception(f'LLM 调用失败，第[{step}]轮')
             return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
 
         memory.add(response)
@@ -69,7 +69,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
             logger.info(f'无需工具调用，第[{step}]轮结束')
             return response.content or ''
 
-        logger.info(f'工具调用第[{step + 1}]轮')
+        logger.info(f'工具调用第[{step}]轮')
 
         for tc in response.tool_calls:
             func_name = tc['name']
