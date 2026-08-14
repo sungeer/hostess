@@ -207,11 +207,19 @@ def bash(command: str, timeout: int = 0) -> str:
     timeout_sec = float(timeout) if timeout > 0 else 120.0
     try:
         r = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
-            timeout=timeout_sec, encoding='utf-8', errors='replace',
+            command, shell=True, capture_output=True,
+            timeout=timeout_sec,
         )
-        out = r.stdout.strip()
-        err = r.stderr.strip()
+        try:
+            out = r.stdout.decode('utf-8')
+        except UnicodeDecodeError:
+            out = r.stdout.decode('gbk', errors='replace')
+        try:
+            err = r.stderr.decode('utf-8')
+        except UnicodeDecodeError:
+            err = r.stderr.decode('gbk', errors='replace')
+        out = out.strip()
+        err = err.strip()
         parts = [out] if out else []
         if err:
             parts.append(f'[stderr]\n{err}')
