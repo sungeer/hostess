@@ -7,10 +7,8 @@
 - Python 3.11+
 
 ```bash
-pip install python-dotenv openai loguru
+python -m pip install langchain-openai python-dotenv loguru
 ```
-
-其余全部使用 Python 标准库。
 
 ## 快速开始
 
