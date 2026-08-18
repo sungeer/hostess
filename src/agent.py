@@ -65,6 +65,9 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
 
         memory.add(response)
 
+        # if response.content:
+        #     print(f'[thought] {response.content[:200]}')
+
         if not response.tool_calls:
             logger.info(f'无需工具调用，第[{step}]轮结束')
             return response.content or ''
