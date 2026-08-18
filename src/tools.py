@@ -210,14 +210,17 @@ def bash(command: str, timeout: int = 0) -> str:
             command, shell=True, capture_output=True,
             timeout=timeout_sec,
         )
+
         try:
             out = r.stdout.decode('utf-8')
         except UnicodeDecodeError:
             out = r.stdout.decode('gbk', errors='replace')
+
         try:
             err = r.stderr.decode('utf-8')
         except UnicodeDecodeError:
             err = r.stderr.decode('gbk', errors='replace')
+
         out = out.strip()
         err = err.strip()
         parts = [out] if out else []
