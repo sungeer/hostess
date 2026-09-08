@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -73,11 +74,12 @@ def read(path: str, offset: int = 0, limit: int = 0) -> str:
     try:
         text = p.read_text(encoding='utf-8')
     except UnicodeDecodeError:
+        # win 中文文件常为 GBK；gbk 也解不开就直接报错，不静默给乱码数据
         try:
-            text = p.read_text(encoding='latin-1')
-            hint += '（已用 latin-1 编码读取）\n'
-        except Exception:
-            return '错误：无法读取该文件（可能为二进制文件）'
+            text = p.read_text(encoding='gbk')
+            hint += '（已用 gbk 编码读取）\n'
+        except UnicodeDecodeError:
+            return '错误：无法读取该文件（编码既不是 utf-8 也不是 gbk，可能为二进制文件）'
 
     lines = text.splitlines()
     total = len(lines)
@@ -200,14 +202,23 @@ def edit(path: str, edits: list[dict]) -> str:
 
 @tool(args_schema=BashInput)
 def bash(command: str, timeout: int = 0) -> str:
-    """在当前工作目录执行 shell 命令。
-    返回 stdout 和 stderr。
-    可指定超时秒数。
+    """在当前工作目录用 Git Bash 执行 shell 命令。
+    命令按 Unix/Git Bash 语法书写（支持变量展开、管道、glob 等）。
+    Windows 路径在命令里请写 /c/... 形式（例如 C:\\foo 写作 /c/foo）。
+    返回 stdout 和 stderr。可指定超时秒数。
     """
+    bash_path = shutil.which('bash')
+    if bash_path is None:
+        return (
+            '错误：未找到 Git Bash。请确认 Git for Windows 已安装，'
+            '并将其 usr/bin 目录加入 PATH。'
+        )
+
     timeout_sec = float(timeout) if timeout > 0 else 120.0
     try:
         r = subprocess.run(
-            command, shell=True, capture_output=True,
+            [bash_path, '-c', command],
+            capture_output=True,
             timeout=timeout_sec,
         )
 
@@ -287,10 +298,17 @@ def grep(
                     continue
             fpath = os.path.join(dirpath_str, fn)
             try:
-                with open(fpath, encoding='utf-8', errors='replace') as f:
-                    file_lines = f.readlines()
+                with open(fpath, 'rb') as f:
+                    raw = f.read()
             except OSError:
                 continue
+
+            try:
+                text = raw.decode('utf-8')
+            except UnicodeDecodeError:
+                # win 中文文件常为 GBK：gbk 仍失败才用 replace 兜底
+                text = raw.decode('gbk', errors='replace')
+            file_lines = text.splitlines(keepends=True)
 
             if context_lines > 0:
                 # 带上下文模式
@@ -350,9 +368,10 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
         return (root / f).stat().st_mtime
 
     matches.sort(key=mtime, reverse=True)
-    truncated = matches[:effective_limit]
+    # 分隔符与 grep 对齐为正斜杠（Windows 下 glob 返回反斜杠）
+    shown = [m.replace('\\', '/') for m in matches[:effective_limit]]
 
-    out = '\n'.join(truncated)
+    out = '\n'.join(shown)
     if len(matches) > effective_limit:
         out += f'\n\n[达到 {effective_limit} 条结果上限。请用更精确的 pattern 或增大 limit。]'
     return out

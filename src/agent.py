@@ -15,7 +15,7 @@ system_prompt = textwrap.dedent('''
     - read: 读取文件内容，支持分页
     - write: 创建或覆写文件
     - edit: 精确字符串替换（oldText 必须唯一、不重叠，所有编辑基于原始文件）
-    - bash: 执行 shell 命令（ls、grep、find 等）
+    - bash: 在 Git Bash（Windows 上的 Unix shell）中执行命令，Windows 路径写 /c/... 形式
     - grep: 按模式搜索文件内容（支持正则、glob 过滤、上下文行）
     - find: 按 glob 模式查找文件（支持 ** 递归）
     - ls: 列出目录内容
