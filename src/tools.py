@@ -207,11 +207,11 @@ def bash(command: str, timeout: int = 0) -> str:
     Windows 路径在命令里请写 /c/... 形式（例如 C:\\foo 写作 /c/foo）。
     返回 stdout 和 stderr。可指定超时秒数。
     """
-    bash_path = shutil.which('bash')
+    bash_path = os.environ.get('GIT_BASH_PATH') or shutil.which('bash')
     if bash_path is None:
         return (
             '错误：未找到 Git Bash。请确认 Git for Windows 已安装，'
-            '并将其 usr/bin 目录加入 PATH。'
+            '并将其 usr/bin 目录加入 PATH，或设置 GIT_BASH_PATH 环境变量。'
         )
 
     timeout_sec = float(timeout) if timeout > 0 else 120.0
@@ -277,7 +277,7 @@ def grep(
         except re.error as e:
             return f'正则错误：{e}'
 
-    def match_line(line_text: str) -> bool:
+    def match_line(line_text: str) -> bool:  # noqa
         if literal:
             if ignore_case:
                 return pattern.lower() in line_text.lower()
@@ -393,7 +393,7 @@ def ls(path: str = '.', limit: int = 500) -> str:
     effective_limit = max(1, int(limit))
 
     try:
-        entries = sorted(p.iterdir(), key=lambda e: e.name.lower())
+        entries = sorted(p.iterdir(), key=lambda e: e.name.lower())  # noqa
     except OSError as e:
         return f'无法列出目录：{e}'
 
