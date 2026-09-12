@@ -169,5 +169,4 @@ uploads/*
 !uploads/.gitkeep
 data/*
 !data/.gitkeep
-CLAUDE.md
-.claudeignore
+AGENTS.md
