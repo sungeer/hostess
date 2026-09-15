@@ -1,6 +1,9 @@
 # hostess
 
 一个运行在命令行里的极简 AI 编码助手，可以帮你读代码、写代码、搜文件和执行命令。
+Build your own coding agent from scratch.
+A progressive tutorial that demystifies AI coding agents like Kode, Claude Code, and Cursor Agent.
+This project is an independent learning implementation. It is not affiliated with Anthropic or the official Claude Code product.
 
 ## 依赖
 
