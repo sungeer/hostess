@@ -1,12 +1,19 @@
 import os
 import re
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+
+# grep/find/ls 三个遍历工具共用的目录跳过规则：
+# 隐藏目录（含 .git、.idea）以及构建产物目录。
+# 只作用于目录，隐藏文件（如 .env）不算在内。
+SKIP_DIRS = frozenset({'__pycache__', 'node_modules'})
+
+
+def _skip_dir(name: str) -> bool:
+    return name.startswith('.') or name in SKIP_DIRS
 
 
 class ReadInput(BaseModel):
@@ -25,11 +32,6 @@ class EditInput(BaseModel):
     edits: list[dict] = Field(
         description='一个或多个精确替换，每项为 {"oldText": ..., "newText": ...}。切勿包含重叠或嵌套的 edit。',
     )
-
-
-class BashInput(BaseModel):
-    command: str = Field(description='要执行的 shell 命令')
-    timeout: int = Field(default=0, description='超时秒数（可选，默认 120 秒）')
 
 
 class GrepInput(BaseModel):
@@ -201,79 +203,6 @@ def edit(path: str, edits: list[dict]) -> str:
         return f'写入失败：{e}'
 
 
-@tool(args_schema=BashInput)
-def bash(command: str, timeout: int = 0) -> str:
-    """在当前工作目录用 Git Bash 执行 shell 命令。
-    命令按 Unix/Git Bash 语法书写（支持变量展开、管道、glob 等）。
-    Windows 路径在命令里请写 /c/... 形式（例如 C:\\foo 写作 /c/foo）。
-    返回 stdout 和 stderr；非零退出码以 [exit code: N] 标记返回。
-    超时（默认 120 秒）后终止整棵进程树。
-    """
-    bash_path = os.environ.get('GIT_BASH_PATH') or shutil.which('bash')
-    if bash_path is None:
-        return (
-            '错误：未找到 Git Bash。请确认 Git for Windows 已安装，'
-            '并将其 usr/bin 目录加入 PATH，或设置 GIT_BASH_PATH 环境变量。'
-        )
-
-    timeout_sec = float(timeout) if timeout > 0 else 120.0
-
-    # 输出写临时文件而不是管道：管道要等所有写端关闭才 EOF，
-    # 后台任务和孤儿子进程会一直攥着写端，把调用拖到它们退出为止。
-    with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
-        try:
-            proc = subprocess.Popen(
-                [bash_path, '-c', command],
-                stdout=out_file,
-                stderr=err_file,
-            )
-        except OSError as e:
-            return f'命令执行失败：{e}'
-
-        try:
-            proc.wait(timeout=timeout_sec)
-            timed_out = False
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            # 用 System32 下的绝对路径：裸名字按「当前目录优先」查找，项目里的同名文件会被执行。
-            # Windows 上 kill 只结束 bash 本身，子进程会留成孤儿，所以杀整棵树。
-            taskkill = os.path.join(
-                os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe',
-            )
-            subprocess.run(
-                [taskkill, '/F', '/T', '/PID', str(proc.pid)],
-                capture_output=True,
-            )
-            proc.kill()
-            proc.wait()
-
-        out_file.seek(0)
-        err_file.seek(0)
-        raw_out = out_file.read()
-        raw_err = err_file.read()
-
-    try:
-        out = raw_out.decode('utf-8')
-    except UnicodeDecodeError:
-        out = raw_out.decode('gbk', errors='replace')
-
-    try:
-        err = raw_err.decode('utf-8')
-    except UnicodeDecodeError:
-        err = raw_err.decode('gbk', errors='replace')
-
-    out = out.strip()
-    err = err.strip()
-    parts = [out] if out else []
-    if err:
-        parts.append(f'[stderr]\n{err}')
-    if timed_out:
-        parts.append(f'(命令超时，已等待 {timeout_sec:.0f} 秒，已终止进程树)')
-    elif proc.returncode:
-        parts.append(f'[exit code: {proc.returncode}]')
-    return '\n'.join(parts) if parts else '(无输出)'
-
-
 @tool(args_schema=GrepInput)
 def grep(
     pattern: str,
@@ -286,7 +215,7 @@ def grep(
 ) -> str:
     """搜索文件内容。
     返回带文件路径和行号的匹配行。
-    跳过隐藏目录。
+    跳过隐藏目录和 __pycache__、node_modules 等构建目录。
     默认最多返回 100 条匹配。
     """
     root = Path(path).expanduser().resolve()
@@ -317,55 +246,69 @@ def grep(
     context_lines = max(0, int(context))
     effective_limit = max(1, int(limit))
 
+    def truncated() -> str:
+        return '\n'.join(results) + '\n...（结果已截断，请缩小搜索范围）'
+
+    def search_file(fpath: str, single: bool) -> bool:
+        """搜单个文件；返回 True 表示已达到结果上限，调用方应停止。
+
+        single 为 True 表示 path 本身就是这个文件，显示文件名而不是相对路径。
+        """
+        try:
+            with open(fpath, 'rb') as f:
+                raw = f.read()
+        except OSError:
+            return False
+
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            # win 中文文件常为 GBK：gbk 仍失败才用 replace 兜底
+            text = raw.decode('gbk', errors='replace')
+        file_lines = text.splitlines(keepends=True)
+        rel = Path(fpath).name if single else os.path.relpath(fpath, root).replace('\\', '/')
+
+        if context_lines > 0:
+            # 带上下文模式
+            matched: set[int] = set()
+            for i, line in enumerate(file_lines):
+                if match_line(line):
+                    matched.add(i)
+            if not matched:
+                return False
+            for i, line in enumerate(file_lines):
+                if any(abs(i - m) <= context_lines for m in matched):
+                    prefix = ':' if i in matched else '-'
+                    line_text = line.rstrip('\n\r')[:200]
+                    results.append(f'{rel}:{prefix}{i + 1}: {line_text}')
+                    if len(results) >= effective_limit:
+                        return True
+        else:
+            # 无上下文模式
+            for i, line in enumerate(file_lines):
+                if match_line(line):
+                    line_text = line.rstrip('\n\r')[:200]
+                    results.append(f'{rel}:{i + 1}: {line_text}')
+                    if len(results) >= effective_limit:
+                        return True
+        return False
+
+    # path 既可以是目录也可以是文件：os.walk 对文件路径什么都不产出，
+    # 所以文件路径必须直接搜，否则会静默返回「无匹配」。
+    if root.is_file():
+        if search_glob and not Path(root.name).match(search_glob):
+            return '(无匹配)'
+        if search_file(str(root), single=True):
+            return truncated()
+        return '\n'.join(results) if results else '(无匹配)'
+
     for dirpath_str, _dirnames, filenames in os.walk(root):
-        _dirnames[:] = [
-            d for d in _dirnames
-            if not d.startswith('.') and d not in ('__pycache__', 'node_modules', '.git')
-        ]
+        _dirnames[:] = [d for d in _dirnames if not _skip_dir(d)]
         for fn in filenames:
-            if search_glob:
-                if not Path(fn).match(search_glob):
-                    continue
-            fpath = os.path.join(dirpath_str, fn)
-            try:
-                with open(fpath, 'rb') as f:
-                    raw = f.read()
-            except OSError:
+            if search_glob and not Path(fn).match(search_glob):
                 continue
-
-            try:
-                text = raw.decode('utf-8')
-            except UnicodeDecodeError:
-                # win 中文文件常为 GBK：gbk 仍失败才用 replace 兜底
-                text = raw.decode('gbk', errors='replace')
-            file_lines = text.splitlines(keepends=True)
-
-            if context_lines > 0:
-                # 带上下文模式
-                matched: set[int] = set()
-                for i, line in enumerate(file_lines):
-                    if match_line(line):
-                        matched.add(i)
-                if not matched:
-                    continue
-                for i, line in enumerate(file_lines):
-                    in_range = any(abs(i - m) <= context_lines for m in matched)
-                    if in_range:
-                        prefix = ':' if i in matched else '-'
-                        rel = os.path.relpath(fpath, root).replace('\\', '/')
-                        line_text = line.rstrip('\n\r')[:200]
-                        results.append(f'{rel}:{prefix}{i + 1}: {line_text}')
-                        if len(results) >= effective_limit:
-                            return '\n'.join(results) + '\n...（结果已截断，请缩小搜索范围）'
-            else:
-                # 无上下文模式
-                for i, line in enumerate(file_lines):
-                    if match_line(line):
-                        rel = os.path.relpath(fpath, root).replace('\\', '/')
-                        line_text = line.rstrip('\n\r')[:200]
-                        results.append(f'{rel}:{i + 1}: {line_text}')
-                        if len(results) >= effective_limit:
-                            return '\n'.join(results) + '\n...（结果已截断，请缩小搜索范围）'
+            if search_file(os.path.join(dirpath_str, fn), single=False):
+                return truncated()
 
     return '\n'.join(results) if results else '(无匹配)'
 
@@ -374,7 +317,7 @@ def grep(
 def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     """按 glob 模式搜索文件。
     返回相对于搜索目录的文件路径。
-    跳过隐藏目录。
+    跳过隐藏目录和 __pycache__、node_modules 等构建目录。
     默认最多返回 1000 条结果。
     """
     root = Path(path).expanduser().resolve()
@@ -391,6 +334,12 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     except (OSError, re.error) as e:
         return f'find 错误：{e}'
 
+    # glob 自己会跳过隐藏目录，但会钻进 __pycache__ 这类非隐藏的构建目录，
+    # 所以按路径成分再过一遍，与 grep/ls 的跳过规则保持一致。
+    def visible(rel: str) -> bool:
+        return not any(_skip_dir(part) for part in Path(rel).parts)
+
+    matches = [m for m in matches if visible(m)]
     if not matches:
         return '没有找到匹配的文件'
 
@@ -411,7 +360,8 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
 def ls(path: str = '.', limit: int = 500) -> str:
     """列出目录内容。
     按字母排序，目录带 / 后缀。
-    包含隐藏文件。
+    跳过隐藏目录和 __pycache__、node_modules 等构建目录。
+    隐藏文件保留（与 grep 的目录跳过规则一致）。
     默认最多返回 500 条。
     """
     p = Path(path).expanduser().resolve()
@@ -427,6 +377,9 @@ def ls(path: str = '.', limit: int = 500) -> str:
     except OSError as e:
         return f'无法列出目录：{e}'
 
+    # 只过滤目录，隐藏文件仍然列出，与 grep/find 的跳过规则一致
+    entries = [e for e in entries if not (e.is_dir() and _skip_dir(e.name))]
+
     if not entries:
         return '(空目录)'
 
@@ -441,4 +394,4 @@ def ls(path: str = '.', limit: int = 500) -> str:
     return '\n'.join(results)
 
 
-TOOLS = [read, write, edit, bash, grep, find, ls]
+TOOLS = [read, write, edit, grep, find, ls]
