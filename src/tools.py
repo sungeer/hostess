@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -205,7 +206,8 @@ def bash(command: str, timeout: int = 0) -> str:
     """在当前工作目录用 Git Bash 执行 shell 命令。
     命令按 Unix/Git Bash 语法书写（支持变量展开、管道、glob 等）。
     Windows 路径在命令里请写 /c/... 形式（例如 C:\\foo 写作 /c/foo）。
-    返回 stdout 和 stderr。可指定超时秒数。
+    返回 stdout 和 stderr；非零退出码以 [exit code: N] 标记返回。
+    超时（默认 120 秒）后终止整棵进程树。
     """
     bash_path = os.environ.get('GIT_BASH_PATH') or shutil.which('bash')
     if bash_path is None:
@@ -215,33 +217,61 @@ def bash(command: str, timeout: int = 0) -> str:
         )
 
     timeout_sec = float(timeout) if timeout > 0 else 120.0
+
+    # 输出写临时文件而不是管道：管道要等所有写端关闭才 EOF，
+    # 后台任务和孤儿子进程会一直攥着写端，把调用拖到它们退出为止。
+    with tempfile.TemporaryFile() as out_file, tempfile.TemporaryFile() as err_file:
+        try:
+            proc = subprocess.Popen(
+                [bash_path, '-c', command],
+                stdout=out_file,
+                stderr=err_file,
+            )
+        except OSError as e:
+            return f'命令执行失败：{e}'
+
+        try:
+            proc.wait(timeout=timeout_sec)
+            timed_out = False
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            # 用 System32 下的绝对路径：裸名字按「当前目录优先」查找，项目里的同名文件会被执行。
+            # Windows 上 kill 只结束 bash 本身，子进程会留成孤儿，所以杀整棵树。
+            taskkill = os.path.join(
+                os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe',
+            )
+            subprocess.run(
+                [taskkill, '/F', '/T', '/PID', str(proc.pid)],
+                capture_output=True,
+            )
+            proc.kill()
+            proc.wait()
+
+        out_file.seek(0)
+        err_file.seek(0)
+        raw_out = out_file.read()
+        raw_err = err_file.read()
+
     try:
-        r = subprocess.run(
-            [bash_path, '-c', command],
-            capture_output=True,
-            timeout=timeout_sec,
-        )
+        out = raw_out.decode('utf-8')
+    except UnicodeDecodeError:
+        out = raw_out.decode('gbk', errors='replace')
 
-        try:
-            out = r.stdout.decode('utf-8')
-        except UnicodeDecodeError:
-            out = r.stdout.decode('gbk', errors='replace')
+    try:
+        err = raw_err.decode('utf-8')
+    except UnicodeDecodeError:
+        err = raw_err.decode('gbk', errors='replace')
 
-        try:
-            err = r.stderr.decode('utf-8')
-        except UnicodeDecodeError:
-            err = r.stderr.decode('gbk', errors='replace')
-
-        out = out.strip()
-        err = err.strip()
-        parts = [out] if out else []
-        if err:
-            parts.append(f'[stderr]\n{err}')
-        return '\n'.join(parts) if parts else '(无输出)'
-    except subprocess.TimeoutExpired:
-        return f'(命令超时，已等待 {timeout_sec:.0f} 秒)'
-    except OSError as e:
-        return f'命令执行失败：{e}'
+    out = out.strip()
+    err = err.strip()
+    parts = [out] if out else []
+    if err:
+        parts.append(f'[stderr]\n{err}')
+    if timed_out:
+        parts.append(f'(命令超时，已等待 {timeout_sec:.0f} 秒，已终止进程树)')
+    elif proc.returncode:
+        parts.append(f'[exit code: {proc.returncode}]')
+    return '\n'.join(parts) if parts else '(无输出)'
 
 
 @tool(args_schema=GrepInput)
