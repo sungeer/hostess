@@ -169,4 +169,4 @@ uploads/*
 !uploads/.gitkeep
 data/*
 !data/.gitkeep
-AGENTS.md
+CLAUDE.md
