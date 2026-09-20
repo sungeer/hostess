@@ -48,43 +48,44 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         try:
             response = llm.bind_tools(TOOLS).invoke(messages)
         except Exception:
-            logger.exception(f'LLM 调用失败，第[{step}]轮')
-            return f'错误：LLM 调用失败（第{step}轮），请检查 API 配置或网络连接'
+            logger.exception('调用失败: 第 {} 轮', step)
+            return f'错误：LLM 调用失败（第 {step} 轮），请检查 API 配置或网络连接'
 
         memory.add(response)
 
-        # if response.content:
-        #     print(f'[thought] {response.content[:200]}')
+        thought = response.content
+        if thought:
+            logger.info('思考过程: {}', thought[:200])
 
         if not response.tool_calls:
-            logger.info(f'无需工具调用，第[{step}]轮结束')
+            logger.info('无需工具: 第 {} 轮结束', step)
             return response.content or ''
 
-        logger.info(f'工具调用第[{step}]轮')
+        logger.info('工具调用: 第 {} 轮', step)
 
         for tc in response.tool_calls:
             func_name = tc['name']
             tool_func = tools_map.get(func_name)
             if tool_func is None:
-                logger.warning(f'未知工具: {func_name}')
+                logger.warning('未知工具: {}', func_name)
                 continue
 
-            logger.info(f'执行工具: {func_name}，参数: {tc["args"]}')
+            logger.info('执行工具: {}，参数: {}', func_name, tc['args'])
 
             try:
                 result = tool_func.invoke(tc)
             except Exception:
-                logger.exception(f'工具执行失败: {func_name}')
+                logger.exception('执行失败: {}', func_name)
                 result = ToolMessage(
                     content=f'工具执行失败: {func_name}',
                     tool_call_id=tc['id'],
                 )
 
-            logger.info(f'工具结果: {str(result.content)[:100]}')
+            logger.info('工具结果: {}', str(result.content)[:100])
 
             memory.add(result)
 
-    logger.warning(f'工具调用达到上限 {max_steps} 轮，强制总结')
+    logger.warning('工具调用达到上限 {} 轮，强制总结', max_steps)
 
     summary_prompt = (
         '你是一个在命令行工作的 AI 编码助手。'
@@ -100,7 +101,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
     try:
         response = llm.invoke(final_messages)
     except Exception:
-        logger.exception('LLM 总结调用失败')
+        logger.exception('总结失败')
         return '错误：LLM 调用失败，无法生成总结'
 
     memory.add(response)
