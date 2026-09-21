@@ -169,4 +169,5 @@ uploads/*
 !uploads/.gitkeep
 data/*
 !data/.gitkeep
+.claudeignore
 CLAUDE.md
