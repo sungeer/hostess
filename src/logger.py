@@ -1,5 +1,4 @@
 import logging
-# import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -25,10 +24,6 @@ def setup_logger():
     datefmt = '%H:%M:%S'
 
     formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
-
-    # console_handler = logging.StreamHandler(sys.stdout)
-    # console_handler.setFormatter(formatter)
-    # root_logger.addHandler(console_handler)
 
     file_handler = TimedRotatingFileHandler(
         log_file,
