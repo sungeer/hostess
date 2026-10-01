@@ -1,11 +1,13 @@
+import logging
 import textwrap
 
-from loguru import logger
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src.llm import llm
 from src.tools import TOOLS
 from src.memory import ShortTerm
+
+logger = logging.getLogger(__name__)
 
 system_prompt = textwrap.dedent('''
     # 角色
@@ -48,44 +50,44 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         try:
             response = llm.bind_tools(TOOLS).invoke(messages)
         except Exception:
-            logger.exception('调用失败: 第 {} 轮', step)
+            logger.exception('调用失败: 第 %d 轮', step)
             return f'错误：LLM 调用失败（第 {step} 轮），请检查 API 配置或网络连接'
 
         memory.add(response)
 
         thought = response.content
         if thought:
-            logger.info('思考过程: {}', thought[:200])
+            logger.info('思考过程: %s', thought[:200])
 
         if not response.tool_calls:
-            logger.info('无需工具: 第 {} 轮结束', step)
+            logger.info('无需工具: 第 %d 轮结束', step)
             return response.content or ''
 
-        logger.info('工具调用: 第 {} 轮', step)
+        logger.info('工具调用: 第 %d 轮', step)
 
         for tc in response.tool_calls:
             func_name = tc['name']
             tool_func = tools_map.get(func_name)
             if tool_func is None:
-                logger.warning('未知工具: {}', func_name)
+                logger.warning('未知工具: %s', func_name)
                 continue
 
-            logger.info('执行工具: {}，参数: {}', func_name, tc['args'])
+            logger.info('执行工具: %s，参数: %s', func_name, tc['args'])
 
             try:
                 result = tool_func.invoke(tc)
             except Exception:
-                logger.exception('执行失败: {}', func_name)
+                logger.exception('执行失败: %s', func_name)
                 result = ToolMessage(
                     content=f'工具执行失败: {func_name}',
                     tool_call_id=tc['id'],
                 )
 
-            logger.info('工具结果: {}', str(result.content)[:100])
+            logger.info('工具结果: %s', str(result.content)[:100])
 
             memory.add(result)
 
-    logger.warning('工具调用达到上限 {} 轮，强制总结', max_steps)
+    logger.warning('工具调用达到上限 %d 轮，强制总结', max_steps)
 
     summary_prompt = (
         '你是一个在命令行工作的 AI 编码助手。'

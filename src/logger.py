@@ -1,42 +1,41 @@
+import logging
+# import sys
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
-
-from loguru import logger
 
 base_dir = Path(__file__).resolve().parent.parent
 
-log_path = base_dir / 'logs/hostess_{time:YYYY-MM-DD}.log'
-
-_LEVEL_ABBR = {
-    'TRACE': 'TRC',
-    'DEBUG': 'DBG',
-    'INFO': 'INF',
-    'SUCCESS': 'SUC',
-    'WARNING': 'WRN',
-    'ERROR': 'ERR',
-    'CRITICAL': 'CRT'
-}
-
-
-def _patch_record(record):
-    record['level'].name = _LEVEL_ABBR.get(record['level'].name, record['level'].name)
+log_file = base_dir / 'logs/hostess.log'
 
 
 def setup_logger():
-    logger.remove()
+    root_logger = logging.getLogger()
 
-    logger.configure(patcher=_patch_record)
+    logging.addLevelName(logging.DEBUG, 'DBG')
+    logging.addLevelName(logging.INFO, 'INF')
+    logging.addLevelName(logging.WARNING, 'WRN')
+    logging.addLevelName(logging.ERROR, 'ERR')
+    logging.addLevelName(logging.CRITICAL, 'CRT')
 
-    fmt = '{time:HH:mm:ss.SSS} | {level} | {message} ({name}:{line})'
+    root_logger.setLevel(logging.INFO)
 
-    logger.add(
-        log_path,
-        rotation='00:00',
-        retention='7 days',
-        format=fmt,
-        encoding='utf-8',
-        diagnose=False,
-        backtrace=False,
-        colorize=False,
-        enqueue=False,  # 关闭异步记录
-        level='INFO',
+    logging.getLogger('httpx2').setLevel(logging.WARNING)
+
+    fmt = '%(asctime)s | %(levelname)s | %(message)s (%(name)s:%(lineno)d)'
+    datefmt = '%H:%M:%S'
+
+    formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+
+    # console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setFormatter(formatter)
+    # root_logger.addHandler(console_handler)
+
+    file_handler = TimedRotatingFileHandler(
+        log_file,
+        when='midnight',
+        backupCount=3,
+        encoding='utf-8'
     )
+
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
