@@ -21,9 +21,8 @@ def setup_logger():
     logging.getLogger('httpx2').setLevel(logging.WARNING)
 
     fmt = '%(asctime)s | %(levelname)s | %(message)s (%(name)s:%(lineno)d)'
-    datefmt = '%H:%M:%S'
 
-    formatter = logging.Formatter(fmt=fmt, datefmt=datefmt)
+    formatter = logging.Formatter(fmt=fmt)
 
     file_handler = TimedRotatingFileHandler(
         log_file,
