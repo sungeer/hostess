@@ -21,6 +21,12 @@ class ShortTerm:
             messages.pop(0)
         return messages
 
+    def drop_last(self) -> None:
+        """撤掉最后一条消息
+        请求失败时用来回收那条还没得到回复的用户提问
+        """
+        self._messages.pop()
+
     def clear(self) -> None:
         """清空全部历史
         开始新对话时使用

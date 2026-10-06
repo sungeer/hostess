@@ -51,6 +51,9 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
             response = llm.bind_tools(TOOLS).invoke(messages)
         except Exception:
             logger.exception('调用失败: 第 %d 轮', step)
+            if step == 1:
+                # 去除没有回复的提问
+                memory.drop_last()
             return f'错误：LLM 调用失败（第 {step} 轮），请检查 API 配置或网络连接'
 
         memory.add(response)

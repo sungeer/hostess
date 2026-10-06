@@ -1,6 +1,10 @@
+import logging
+
 from src.logger import setup_logger
 from src.agent import run_agent
 from src.memory import ShortTerm
+
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -30,6 +34,11 @@ def main() -> None:
             print('Memory cleared. New conversation started.')
             continue
 
-        result = run_agent(user_input, memory)
+        try:
+            result = run_agent(user_input, memory)
+        except Exception:
+            logger.exception('this request failed')
+            print('Agent: 本次请求失败，详情见日志记录')
+            continue
 
         print(f'Agent: {result}')
