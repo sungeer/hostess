@@ -27,7 +27,7 @@ MODEL=deepseek-v4-flash
 ### 2. Launch
 
 ```bash
-python -m src
+python -m run.py
 ```
 
 ## Built-in Commands
