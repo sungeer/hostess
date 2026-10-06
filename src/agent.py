@@ -70,6 +70,10 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
             tool_func = tools_map.get(func_name)
             if tool_func is None:
                 logger.warning('未知工具: %s', func_name)
+                memory.add(ToolMessage(
+                    content=f'错误：未知工具 {func_name}',
+                    tool_call_id=tc['id'],
+                ))
                 continue
 
             logger.info('执行工具: %s，参数: %s', func_name, tc['args'])
@@ -94,11 +98,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
         '根据已有信息回答用户，不要客套寒暄，采用最简洁明了的回答。'
     )
 
-    final_messages = [SystemMessage(summary_prompt)]
-
-    for msg in memory.get_messages():
-        if isinstance(msg, (HumanMessage, ToolMessage)):
-            final_messages.append(msg)  # type: ignore[misc]
+    final_messages = [SystemMessage(summary_prompt)] + memory.get_messages()
 
     try:
         response = llm.invoke(final_messages)

@@ -1,6 +1,6 @@
 from collections import deque
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, ToolMessage
 
 
 class ShortTerm:
@@ -16,7 +16,10 @@ class ShortTerm:
 
     def get_messages(self) -> list[BaseMessage]:
         """返回消息列表的副本"""
-        return list(self._messages)
+        messages = list(self._messages)
+        while messages and isinstance(messages[0], ToolMessage):
+            messages.pop(0)
+        return messages
 
     def clear(self) -> None:
         """清空全部历史
