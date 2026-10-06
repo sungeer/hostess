@@ -32,5 +32,5 @@ llm = ChatOpenAI(
     },
     http_client=http_client,
     temperature=0.0,
-    http_socket_options=(),  # 关闭 TCP Keep-Alive 的自定义配置
+    http_socket_options=(),
 )
