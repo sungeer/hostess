@@ -39,7 +39,7 @@ system_prompt = textwrap.dedent('''
 ''').strip()
 
 
-def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
+def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
     memory.add(HumanMessage(content=user_input))
 
     tools_map = {t.name: t for t in TOOLS}
@@ -94,21 +94,6 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 100) -> str:
 
             memory.add(result)
 
-    logger.warning('工具调用达到上限 %d 轮，强制总结', max_steps)
+    logger.warning('工具调用达到上限 %d 轮，本轮中断', max_steps)
 
-    summary_prompt = (
-        '你是一个在命令行工作的 AI 编码助手。'
-        '根据已有信息回答用户，不要客套寒暄，采用最简洁明了的回答。'
-    )
-
-    final_messages = [SystemMessage(summary_prompt)] + memory.get_messages()
-
-    try:
-        response = llm.invoke(final_messages)
-    except Exception:
-        logger.exception('总结失败')
-        return '错误：LLM 调用失败，无法生成总结'
-
-    memory.add(response)
-
-    return response.content or ''
+    return f'已达工具调用上限（{max_steps} 轮），本轮中断。可以回复「继续」接着做。'

@@ -1,24 +1,15 @@
-from collections import deque
-
-from langchain_core.messages import BaseMessage, ToolMessage
-
-
 class ShortTerm:
 
-    def __init__(self, max_messages: int = 100) -> None:
-        self._messages: deque[BaseMessage] = deque(maxlen=max_messages)
+    def __init__(self) -> None:
+        self._messages = []
 
-    def add(self, message: BaseMessage) -> None:
-        """添加一条消息
-        超出上限时自动丢弃最旧的
-        """
+    def add(self, message) -> None:
+        """添加一条消息"""
         self._messages.append(message)
 
-    def get_messages(self) -> list[BaseMessage]:
+    def get_messages(self):
         """返回消息列表的副本"""
         messages = list(self._messages)
-        while messages and isinstance(messages[0], ToolMessage):
-            messages.pop(0)
         return messages
 
     def drop_last(self) -> None:
