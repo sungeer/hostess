@@ -5,8 +5,7 @@ pip freeze > requirements.txt
 pip install -r requirements.txt
 
 
-python -m pip install langchain-openai python-dotenv
+python -m pip install pytest python-dotenv langchain-openai
 
-python -m pip install langchain pytest
 
 python -m pip install --upgrade langchain-openai python-dotenv
