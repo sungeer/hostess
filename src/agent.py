@@ -38,17 +38,19 @@ system_prompt = textwrap.dedent('''
     - 不要无理由地改变与任务无关的代码
 ''').strip()
 
+llm_with_tools = llm.bind_tools(TOOLS)
+
+tools_map = {t.name: t for t in TOOLS}
+
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
     memory.add(HumanMessage(content=user_input))
-
-    tools_map = {t.name: t for t in TOOLS}
 
     for step in range(1, max_steps + 1):
         messages = [SystemMessage(system_prompt)] + memory.get_messages()
 
         try:
-            response = llm.bind_tools(TOOLS).invoke(messages)
+            response = llm_with_tools.invoke(messages)
         except Exception:
             logger.exception('调用失败: 第 %d 轮', step)
             if step == 1:
@@ -74,7 +76,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
             if tool_func is None:
                 logger.warning('未知工具: %s', func_name)
                 memory.add(ToolMessage(
-                    content=f'错误：未知工具 {func_name}',
+                    content=f'错误： 未知工具 {func_name}',
                     tool_call_id=tc['id'],
                 ))
                 continue
@@ -83,10 +85,10 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
 
             try:
                 result = tool_func.invoke(tc)
-            except Exception:
+            except Exception as exc:
                 logger.exception('执行失败: %s', func_name)
                 result = ToolMessage(
-                    content=f'工具执行失败: {func_name}',
+                    content=f'工具执行失败: {exc}',
                     tool_call_id=tc['id'],
                 )
 
