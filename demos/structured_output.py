@@ -1,32 +1,6 @@
-import httpx2 as httpx
-
-from openai import OpenAI
 from pydantic import BaseModel, Field
 
-LLM_BASE_URL = 'http://your-proxy-host/v1'
-LLM_API_KEY = 'your-api-key'
-LLM_MODEL = 'deepseek-v4-pro'
-
-http_client = httpx.Client(
-    timeout=httpx.Timeout(
-        connect=10.0,
-        read=180.0,
-        write=10.0,
-        pool=10.0
-    ),
-    limits=httpx.Limits(
-        max_connections=1000,
-        keepalive_expiry=0.0,
-    ),
-    verify=False,
-)
-
-client = OpenAI(
-    base_url=LLM_BASE_URL,
-    api_key=LLM_API_KEY,
-    http_client=http_client,
-    # timeout=120,
-)
+from src.llm import llm
 
 
 class OrderItem(BaseModel):
@@ -55,20 +29,15 @@ def llm_parse(messages: list, response_format):
     Returns:
         解析后的 Pydantic 模型实例；解析失败时返回 None
     """
-    response = client.beta.chat.completions.parse(
-        model=LLM_MODEL,
-        messages=messages,
-        response_format=response_format,  # OrderInfo
-        temperature=0.0,
-        extra_body={
-            'thinking': {
-                'type': 'disabled'
-            }
-        },
+    structured_llm = llm.with_structured_output(
+        response_format,          # OrderInfo
+        method='function_calling',  # 当前代理不支持 json_schema
+        include_raw=True,         # 解析失败时不抛异常，便于按 None 处理
     )
-    parsed = response.choices[0].message.parsed  # OrderInfo | None
+    result = structured_llm.invoke(messages)
+    parsed = result['parsed']  # OrderInfo | None
     if parsed is None:
-        print(f'[警告] 结构化解析失败，原始内容: {response.choices[0].message.content}')
+        print(f'[警告] 结构化解析失败，原始内容: {result["raw"].content}')
     return parsed
 
 
