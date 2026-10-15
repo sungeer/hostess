@@ -1,6 +1,14 @@
-from pydantic import BaseModel, Field
+import logging
+
+from pydantic import BaseModel, Field, model_validator
 
 from src.llm import llm
+from src.logger import setup_logger
+
+logger = logging.getLogger(__name__)
+
+# 单次结构化输出的最大尝试次数：首次失败后带错误原因重试一次
+MAX_ATTEMPTS = 2
 
 
 class OrderItem(BaseModel):
@@ -18,6 +26,16 @@ class OrderInfo(BaseModel):
     total_amount: float = Field(..., description='订单总金额（元）')
     is_urgent: bool = Field(..., description='客户是否要求加急')
 
+    @model_validator(mode='after')
+    def check_total_amount(self) -> 'OrderInfo':
+        """业务校验：明细合计必须与总金额一致（容忍 1 分钱浮点误差）"""
+        items_sum = sum(item.quantity * item.unit_price for item in self.items)
+        if abs(items_sum - self.total_amount) > 0.01:
+            raise ValueError(
+                f'明细合计 {items_sum} 与总金额 {self.total_amount} 不一致'
+            )
+        return self
+
 
 def llm_parse(messages: list, response_format):
     """调用 LLM 并返回按 response_format 解析后的结构化对象。
@@ -27,18 +45,41 @@ def llm_parse(messages: list, response_format):
         response_format: Pydantic 模型类（不是实例）
 
     Returns:
-        解析后的 Pydantic 模型实例；解析失败时返回 None
+        解析后的 Pydantic 模型实例；重试用尽仍失败时返回 None
     """
     structured_llm = llm.with_structured_output(
-        response_format,          # OrderInfo
+        response_format,            # OrderInfo
         method='function_calling',  # 当前代理不支持 json_schema
-        include_raw=True,         # 解析失败时不抛异常，便于按 None 处理
+        include_raw=True,           # 解析失败不抛异常，便于按 None 处理
     )
-    result = structured_llm.invoke(messages)
-    parsed = result['parsed']  # OrderInfo | None
-    if parsed is None:
-        print(f'[警告] 结构化解析失败，原始内容: {result["raw"].content}')
-    return parsed
+    current_messages = messages
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            result = structured_llm.invoke(current_messages)
+        except Exception:
+            # 调用层失败（超时、503 过载等）：原样重试，错误原因对模型没有意义
+            logger.exception('第 %s 次调用 LLM 失败', attempt)
+            continue
+
+        parsed = result['parsed']  # OrderInfo | None
+        if parsed is not None:
+            return parsed
+
+        error = result['parsing_error']
+        logger.warning('第 %s 次结构化解析失败: %s', attempt, error)
+        # 模型的 tool_call 必须逐条用 tool 消息应答，否则接口返回 400；
+        # 校验错误就放在 tool 的返回内容里，模型据此自我修正，而不是原样重试
+        corrections = [
+            {
+                'role': 'tool',
+                'content': f'校验失败：{error}。请修正后重新输出。',
+                'tool_call_id': call['id'],
+            }
+            for call in result['raw'].tool_calls
+        ]
+        current_messages = [*current_messages, result['raw'], *corrections]
+
+    return None
 
 
 def extract_order(user_input: str):
@@ -48,7 +89,7 @@ def extract_order(user_input: str):
         user_input: 用户自由输入的订单描述
 
     Returns:
-        解析后的 OrderInfo 对象
+        解析后的 OrderInfo 对象；重试用尽仍失败时返回 None
     """
     messages = [
         {
@@ -64,6 +105,8 @@ def extract_order(user_input: str):
 
 
 if __name__ == '__main__':
+    setup_logger()
+
     # ----- 场景一：订单抽取 -----
     print('=' * 60)
     print('【场景一】订单信息抽取')
@@ -89,3 +132,5 @@ if __name__ == '__main__':
             print(f'    - {item.product_name} × {item.quantity}, '
                   f'单价 ¥{item.unit_price}')
         print(f'\nJSON 序列化:\n{order.model_dump_json(indent=2)}')
+    else:
+        print('提取失败，详情见日志记录')
