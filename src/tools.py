@@ -2,9 +2,6 @@ import os
 import re
 from pathlib import Path
 
-from pydantic import BaseModel, Field
-from langchain_core.tools import tool
-
 
 # grep/find/ls 三个遍历工具共用的目录跳过规则：
 # 隐藏目录（含 .git、.idea）以及构建产物目录。
@@ -16,46 +13,143 @@ def _skip_dir(name: str) -> bool:
     return name.startswith('.') or name in SKIP_DIRS
 
 
-class ReadInput(BaseModel):
-    path: str = Field(description='要读取的文件路径（相对或绝对）')
-    offset: int = Field(default=0, description='起始行号，从1开始，0表示从头读取')
-    limit: int = Field(default=0, description='最大读取行数，0表示读取全部')
+# OpenAI tools 格式。手写 JSON Schema 而不从函数签名推导，是为了让发给模型的接口一目了然。
+READ_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'read',
+        'description': '读取文件内容。\n支持文本文件。\n用 offset/limit 分页读取大文件。',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': '要读取的文件路径（相对或绝对）'},
+                'offset': {'type': 'integer', 'description': '起始行号，从1开始，0表示从头读取', 'default': 0},
+                'limit': {'type': 'integer', 'description': '最大读取行数，0表示读取全部', 'default': 0},
+            },
+            'required': ['path'],
+        },
+    },
+}
+
+WRITE_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'write',
+        'description': '写入文件。\n文件不存在则创建，存在则覆盖。\n自动创建父目录。',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': '要写入的文件路径（相对或绝对）'},
+                'content': {'type': 'string', 'description': '要写入文件的完整内容'},
+            },
+            'required': ['path', 'content'],
+        },
+    },
+}
+
+EDIT_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'edit',
+        'description': (
+            '对单个文件进行精确字符串替换。\n'
+            'edits[].oldText 必须在原文件中唯一，且不能重叠。\n'
+            '所有编辑基于原始文件匹配（非增量应用）。\n'
+            '多个不连续的修改请放在一次 edit 调用的多个 edits[] 中。'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': '要编辑的文件路径（相对或绝对）'},
+                'edits': {
+                    'type': 'array',
+                    'description': '一个或多个精确替换，每项为 {"oldText": ..., "newText": ...}。切勿包含重叠或嵌套的 edit。',
+                    'minItems': 1,
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'oldText': {'type': 'string'},
+                            'newText': {'type': 'string'},
+                        },
+                        'required': ['oldText', 'newText'],
+                    },
+                },
+            },
+            'required': ['path', 'edits'],
+        },
+    },
+}
+
+GREP_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'grep',
+        'description': (
+            '搜索文件内容。\n'
+            '返回带文件路径和行号的匹配行。\n'
+            '跳过隐藏目录和 __pycache__、node_modules 等构建目录。\n'
+            '默认最多返回 100 条匹配。'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'pattern': {'type': 'string', 'description': '搜索模式（正则或字面量字符串）'},
+                'path': {'type': 'string', 'description': '搜索目录或文件（默认当前目录）', 'default': '.'},
+                'glob': {'type': 'string', 'description': '按 glob 过滤文件，例如 *.py 或 **/*.spec.ts', 'default': ''},
+                'ignore_case': {'type': 'boolean', 'description': '不区分大小写搜索（默认 false）', 'default': False},
+                'literal': {'type': 'boolean', 'description': '将 pattern 视为字面量字符串而非正则（默认 false）', 'default': False},
+                'context': {'type': 'integer', 'description': '每条匹配前后显示的行数（默认 0）', 'default': 0},
+                'limit': {'type': 'integer', 'description': '最大返回匹配数（默认 100）', 'default': 100},
+            },
+            'required': ['pattern'],
+        },
+    },
+}
+
+FIND_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'find',
+        'description': (
+            '按 glob 模式搜索文件。\n'
+            '返回相对于搜索目录的文件路径。\n'
+            '跳过隐藏目录和 __pycache__、node_modules 等构建目录。\n'
+            '默认最多返回 1000 条结果。'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'pattern': {'type': 'string', 'description': 'Glob 模式，例如 *.ts、**/*.json 或 src/**/*.spec.ts'},
+                'path': {'type': 'string', 'description': '搜索目录（默认当前目录）', 'default': '.'},
+                'limit': {'type': 'integer', 'description': '最大返回结果数（默认 1000）', 'default': 1000},
+            },
+            'required': ['pattern'],
+        },
+    },
+}
+
+LS_TOOL = {
+    'type': 'function',
+    'function': {
+        'name': 'ls',
+        'description': (
+            '列出目录内容。\n'
+            '按字母排序，目录带 / 后缀。\n'
+            '跳过隐藏目录和 __pycache__、node_modules 等构建目录。\n'
+            '隐藏文件保留（与 grep 的目录跳过规则一致）。\n'
+            '默认最多返回 500 条。'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': '要列出的目录（默认当前目录）', 'default': '.'},
+                'limit': {'type': 'integer', 'description': '最大返回条目数（默认 500）', 'default': 500},
+            },
+        },
+    },
+}
 
 
-class WriteInput(BaseModel):
-    path: str = Field(description='要写入的文件路径（相对或绝对）')
-    content: str = Field(description='要写入文件的完整内容')
-
-
-class EditInput(BaseModel):
-    path: str = Field(description='要编辑的文件路径（相对或绝对）')
-    edits: list[dict] = Field(
-        description='一个或多个精确替换，每项为 {"oldText": ..., "newText": ...}。切勿包含重叠或嵌套的 edit。',
-    )
-
-
-class GrepInput(BaseModel):
-    pattern: str = Field(description='搜索模式（正则或字面量字符串）')
-    path: str = Field(default='.', description='搜索目录或文件（默认当前目录）')
-    glob: str = Field(default='', description='按 glob 过滤文件，例如 *.py 或 **/*.spec.ts')
-    ignore_case: bool = Field(default=False, description='不区分大小写搜索（默认 false）')
-    literal: bool = Field(default=False, description='将 pattern 视为字面量字符串而非正则（默认 false）')
-    context: int = Field(default=0, description='每条匹配前后显示的行数（默认 0）')
-    limit: int = Field(default=100, description='最大返回匹配数（默认 100）')
-
-
-class FindInput(BaseModel):
-    pattern: str = Field(description='Glob 模式，例如 *.ts、**/*.json 或 src/**/*.spec.ts')
-    path: str = Field(default='.', description='搜索目录（默认当前目录）')
-    limit: int = Field(default=1000, description='最大返回结果数（默认 1000）')
-
-
-class LsInput(BaseModel):
-    path: str = Field(default='.', description='要列出的目录（默认当前目录）')
-    limit: int = Field(default=500, description='最大返回条目数（默认 500）')
-
-
-@tool(args_schema=ReadInput)
 def read(path: str, offset: int = 0, limit: int = 0) -> str:
     """读取文件内容。
     支持文本文件。
@@ -104,7 +198,6 @@ def read(path: str, offset: int = 0, limit: int = 0) -> str:
     return hint + header + result
 
 
-@tool(args_schema=WriteInput)
 def write(path: str, content: str) -> str:
     """写入文件。
     文件不存在则创建，存在则覆盖。
@@ -119,7 +212,6 @@ def write(path: str, content: str) -> str:
         return f'写入失败：{e}'
 
 
-@tool(args_schema=EditInput)
 def edit(path: str, edits: list[dict]) -> str:
     """对单个文件进行精确字符串替换。
     edits[].oldText 必须在原文件中唯一，且不能重叠。
@@ -203,7 +295,6 @@ def edit(path: str, edits: list[dict]) -> str:
         return f'写入失败：{e}'
 
 
-@tool(args_schema=GrepInput)
 def grep(
     pattern: str,
     path: str = '.',
@@ -313,7 +404,6 @@ def grep(
     return '\n'.join(results) if results else '(无匹配)'
 
 
-@tool(args_schema=FindInput)
 def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     """按 glob 模式搜索文件。
     返回相对于搜索目录的文件路径。
@@ -356,7 +446,6 @@ def find(pattern: str, path: str = '.', limit: int = 1000) -> str:
     return out
 
 
-@tool(args_schema=LsInput)
 def ls(path: str = '.', limit: int = 500) -> str:
     """列出目录内容。
     按字母排序，目录带 / 后缀。
@@ -395,3 +484,5 @@ def ls(path: str = '.', limit: int = 500) -> str:
 
 
 TOOLS = [read, write, edit, grep, find, ls]
+
+TOOL_SCHEMAS = [READ_TOOL, WRITE_TOOL, EDIT_TOOL, GREP_TOOL, FIND_TOOL, LS_TOOL]

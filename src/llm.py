@@ -2,9 +2,11 @@ import os
 
 import httpx2 as httpx
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from openai import OpenAI
 
 load_dotenv()
+
+MODEL = os.environ.get('MODEL', 'deepseek-v4-flash')
 
 http_client = httpx.Client(
     timeout=httpx.Timeout(
@@ -20,17 +22,8 @@ http_client = httpx.Client(
     verify=False,
 )
 
-llm = ChatOpenAI(
-    model=os.environ.get('MODEL', 'deepseek-v4-flash'),
+client = OpenAI(
     base_url=os.environ.get('API_BASE_URL'),
     api_key=os.environ.get('API_KEY'),
-    streaming=False,
-    extra_body={
-        'thinking': {
-            'type': 'disabled'
-        }
-    },
     http_client=http_client,
-    temperature=0.0,
-    http_socket_options=(),
 )

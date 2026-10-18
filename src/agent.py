@@ -1,10 +1,9 @@
+import json
 import logging
 import textwrap
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
-
-from src.llm import llm
-from src.tools import TOOLS
+from src.llm import MODEL, client
+from src.tools import TOOL_SCHEMAS, TOOLS
 from src.memory import ShortTerm
 
 logger = logging.getLogger(__name__)
@@ -38,19 +37,23 @@ system_prompt = textwrap.dedent('''
     - 不要无理由地改变与任务无关的代码
 ''').strip()
 
-llm_with_tools = llm.bind_tools(TOOLS)
-
-tools_map = {t.name: t for t in TOOLS}
+tools_map = {t.__name__: t for t in TOOLS}
 
 
 def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
-    memory.add(HumanMessage(content=user_input))
+    memory.add({'role': 'user', 'content': user_input})
 
     for step in range(1, max_steps + 1):
-        messages = [SystemMessage(system_prompt)] + memory.get_messages()
+        messages = [{'role': 'system', 'content': system_prompt}] + memory.get_messages()
 
         try:
-            response = llm_with_tools.invoke(messages)
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                temperature=0.0,
+                extra_body={'thinking': {'type': 'disabled'}},
+            )
         except Exception:
             logger.exception('调用失败: 第 %d 轮', step)
             if step == 1:
@@ -58,43 +61,47 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
                 memory.drop_last()
             return f'错误：LLM 调用失败（第 {step} 轮），请检查 API 配置或网络连接'
 
-        memory.add(response)
+        message = response.choices[0].message
+        # 带 tool_calls 的 assistant 消息必须原样回填，下一轮工具结果才有对应的调用 id
+        memory.add(message.model_dump(exclude_none=True))
 
-        thought = response.content
+        thought = message.content
         if thought:
             logger.info('思考过程: %s', thought[:200])
 
-        if not response.tool_calls:
+        if not message.tool_calls:
             logger.info('无需工具: 第 %d 轮结束', step)
-            return response.content or ''
+            return message.content or ''
 
         logger.info('工具调用: 第 %d 轮', step)
 
-        for tc in response.tool_calls:
-            func_name = tc['name']
+        for tc in message.tool_calls:
+            func_name = tc.function.name
             tool_func = tools_map.get(func_name)
             if tool_func is None:
                 logger.warning('未知工具: %s', func_name)
-                memory.add(ToolMessage(
-                    content=f'错误： 未知工具 {func_name}',
-                    tool_call_id=tc['id'],
-                ))
+                memory.add({
+                    'role': 'tool',
+                    'tool_call_id': tc.id,
+                    'content': f'错误： 未知工具 {func_name}',
+                })
                 continue
 
-            logger.info('执行工具: %s，参数: %s', func_name, tc['args'])
-
             try:
-                result = tool_func.invoke(tc)
+                args = json.loads(tc.function.arguments or '{}')
+                logger.info('执行工具: %s，参数: %s', func_name, args)
+                result = tool_func(**args)
             except Exception as exc:
                 logger.exception('执行失败: %s', func_name)
-                result = ToolMessage(
-                    content=f'工具执行失败: {exc}',
-                    tool_call_id=tc['id'],
-                )
+                result = f'工具执行失败: {exc}'
 
-            logger.info('工具结果: %s', str(result.content)[:100])
+            logger.info('工具结果: %s', str(result)[:100])
 
-            memory.add(result)
+            memory.add({
+                'role': 'tool',
+                'tool_call_id': tc.id,
+                'content': result,
+            })
 
     logger.warning('工具调用达到上限 %d 轮，本轮中断', max_steps)
 
