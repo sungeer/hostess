@@ -2,14 +2,14 @@
 
 A minimal AI coding agent that lives in your terminal.
 You describe what you want; it reads files, searches the project, and edits code to get it done.
-It is built on LangChain and talks to any OpenAI-compatible chat API (DeepSeek by default), logging each run to `logs/`.
+It talks to any OpenAI-compatible chat API (DeepSeek by default), logging each run to `logs/`.
 
 ## Requirements
 
 - Python 3.10+
 
 ```bash
-python -m pip install langchain-openai httpx2 python-dotenv loguru
+python -m pip install openai httpx2 python-dotenv loguru
 ```
 
 ## Quick Start

@@ -54,6 +54,7 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
                 temperature=0.0,
                 extra_body={'thinking': {'type': 'disabled'}},
             )
+            message = response.choices[0].message
         except Exception:
             logger.exception('调用失败: 第 %d 轮', step)
             if step == 1:
@@ -61,7 +62,6 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
                 memory.drop_last()
             return f'错误：LLM 调用失败（第 {step} 轮），请检查 API 配置或网络连接'
 
-        message = response.choices[0].message
         # 带 tool_calls 的 assistant 消息必须原样回填，下一轮工具结果才有对应的调用 id
         memory.add(message.model_dump(exclude_none=True))
 

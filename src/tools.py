@@ -155,6 +155,10 @@ def read(path: str, offset: int = 0, limit: int = 0) -> str:
     支持文本文件。
     用 offset/limit 分页读取大文件。
     """
+    # 模型可能把数字传成字符串；旧版 pydantic 会自动转换，这里显式对齐
+    offset = int(offset)
+    limit = int(limit)
+
     p = Path(path).expanduser().resolve()
     if not p.exists():
         return f'错误：文件不存在 — {p}'
