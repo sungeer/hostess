@@ -52,7 +52,11 @@ def run_agent(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
                 messages=messages,
                 tools=TOOL_SCHEMAS,
                 temperature=0.0,
-                extra_body={'thinking': {'type': 'disabled'}},
+                extra_body={
+                    'thinking': {
+                        'type': 'disabled'
+                    }
+                },
             )
             message = response.choices[0].message
         except Exception:
