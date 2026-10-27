@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 
 
 class GrepInput(BaseModel):
-    """grep 工具参数"""
+    """tool_grep 工具参数"""
     pattern: str = Field(description='搜索关键词或正则，不区分大小写')
     path: str = Field(default='.', description='搜索目录，默认当前目录')
     include: str = Field(default='', description='文件名过滤，例如 .py')
@@ -14,7 +14,10 @@ class GrepInput(BaseModel):
 
 @tool(args_schema=GrepInput)
 def tool_grep(pattern: str, path: str = '.', include: str = '') -> str:
-    """纯 Python 递归搜索文件内容，不区分大小写，最多返回 100 条。"""
+    """搜索文件内容，
+    返回带文件路径和行号的匹配行，
+    跳过隐藏目录，最多返回 100 条匹配。
+    """
     root = Path(path).expanduser().resolve()
     if not root.exists():
         return f'错误：路径不存在 — {root}'

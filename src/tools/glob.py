@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 
 
 class GlobInput(BaseModel):
-    """glob 工具参数"""
+    """tool_glob 工具参数"""
     pattern: str = Field(description='glob 模式，例如 **/*.py，支持 ** 递归')
     path: str = Field(default='.', description='搜索目录，默认当前目录')
 

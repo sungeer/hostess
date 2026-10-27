@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 
 
 class ReadInput(BaseModel):
-    """read 工具参数"""
+    """tool_read 工具参数"""
     file_path: str = Field(description='文件路径')
     offset: int = Field(default=0, description='起始行号，从1开始，0表示从头读取')
     limit: int = Field(default=0, description='最大行数，0表示读取全部')
@@ -14,7 +14,8 @@ class ReadInput(BaseModel):
 @tool(args_schema=ReadInput)
 def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
     """读取文件内容，带行号。
-    offset 和 limit 从 1 开始计数。
+    支持文本文件。
+    offset 和 limit 分页读取大文件。
     """
     p = Path(file_path).expanduser().resolve()
     if not p.exists():
