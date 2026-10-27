@@ -1,8 +1,8 @@
 import logging
 
-from src.logger import setup_logger
-from src.agent import run_agent
-from src.memory import ShortTerm
+from src.core.logger import setup_logger
+from src.core.memory import ShortTerm
+from src.agents import react_agent
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def main() -> None:
             continue
 
         try:
-            result = run_agent(user_input, memory)
+            result = react_agent.run(user_input, memory)
         except Exception:
             logger.exception('this request failed')
             print('Agent: 本次请求失败，详情见日志记录')

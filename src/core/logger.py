@@ -1,8 +1,9 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 
-base_dir = Path(__file__).resolve().parent.parent
+from src import settings
+
+base_dir = settings.BASE_DIR
 
 log_file = base_dir / 'logs/hostess.log'
 
