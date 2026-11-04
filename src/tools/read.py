@@ -42,6 +42,11 @@ def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
     lines = text.splitlines()
     total = len(lines)
 
+    if limit < 0:
+        return f'错误：limit 不能为负数 — limit={limit}'
+    if offset > total:
+        return f'错误：offset 超出文件范围 — offset={offset}，共 {total} 行'
+
     # 确定读取范围
     start = max(0, offset - 1) if offset > 0 else 0
     if limit > 0:
