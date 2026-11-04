@@ -17,28 +17,28 @@ def main() -> None:
 
     while True:
         try:
-            user_input = input('\nYou: ').strip()
+            user_input = input('\n> ').strip()
         except (EOFError, KeyboardInterrupt):
-            print('\nBye！')
+            print('\n* Bye！')
             break
 
         if not user_input:
             continue
 
         if user_input.lower() in ('/exit', '/q', '/quit'):
-            print('\nBye！')
+            print('\n* Bye！')
             break
 
         if user_input.lower() == '/clear':
             memory.clear()
-            print('Memory cleared. New conversation started.')
+            print('* Memory cleared. New conversation started.')
             continue
 
         try:
             result = react_agent.run(user_input, memory)
         except Exception:
             logger.exception('this request failed')
-            print('Agent: 本次请求失败，详情见日志记录')
+            print('● 本次请求失败，详情见日志记录')
             continue
 
-        print(f'Agent: {result}')
+        print(f'● {result}')
