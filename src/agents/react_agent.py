@@ -3,6 +3,7 @@ import textwrap
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
+from src import settings
 from src.core.llm import llm
 from src.core.memory import ShortTerm
 from src.tools import register
@@ -18,6 +19,10 @@ system_prompt = textwrap.dedent('''
     
     # 最高指令
     - 严禁直接修改代码
+
+    # 环境
+    - 当前工作目录：{workspace}
+    - 工具中的相对路径都相对该目录解析
 
     # 能力边界
     - 禁止使用 shell 工具
@@ -53,8 +58,10 @@ tools_map = {t.name: t for t in register.tools}
 def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
     memory.add(HumanMessage(content=user_input))
 
+    sys_prompt = SystemMessage(content=system_prompt.format(workspace=settings.WORKSPACE))
+
     for step in range(1, max_steps + 1):
-        messages = [SystemMessage(system_prompt)] + memory.get_messages()
+        messages = [sys_prompt] + memory.get_messages()
 
         try:
             response = llm_with_tools.invoke(messages)

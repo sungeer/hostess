@@ -1,8 +1,9 @@
 import os
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+from src import settings
 
 
 class GrepInput(BaseModel):
@@ -18,7 +19,7 @@ def tool_grep(pattern: str, path: str = '.', include: str = '') -> str:
     返回带文件路径和行号的匹配行，
     跳过隐藏目录，最多返回 100 条匹配。
     """
-    root = Path(path).expanduser().resolve()
+    root = settings.resolve_path(path)
     if not root.exists():
         return f'错误：路径不存在 — {root}'
 

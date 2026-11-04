@@ -1,9 +1,10 @@
 import re
 import glob as _glob
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+from src import settings
 
 
 class GlobInput(BaseModel):
@@ -15,7 +16,7 @@ class GlobInput(BaseModel):
 @tool(args_schema=GlobInput)
 def tool_glob(pattern: str, path: str = '.') -> str:
     """按 glob 模式匹配文件列表，支持 ** 递归，按修改时间倒序排列。"""
-    root = Path(path).expanduser().resolve()
+    root = settings.resolve_path(path)
     if not root.exists():
         return f'错误：路径不存在 — {root}'
     if not root.is_dir():

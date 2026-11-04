@@ -1,7 +1,7 @@
-from pathlib import Path
-
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+from src import settings
 
 
 class WriteInput(BaseModel):
@@ -16,7 +16,7 @@ def tool_write(file_path: str, content: str) -> str:
     文件不存在则创建，存在则覆盖。
     自动创建父目录。
     """
-    p = Path(file_path).expanduser().resolve()
+    p = settings.resolve_path(file_path)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding='utf-8')

@@ -1,7 +1,7 @@
-from pathlib import Path
-
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+
+from src import settings
 
 
 class ReadInput(BaseModel):
@@ -17,7 +17,7 @@ def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
     支持文本文件。
     offset 和 limit 分页读取大文件。
     """
-    p = Path(file_path).expanduser().resolve()
+    p = settings.resolve_path(file_path)
     if not p.exists():
         return f'错误：文件不存在 — {p}'
     if p.is_dir():
