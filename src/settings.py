@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-VERSION = '26.1105.0920'
+VERSION = '26.1106.0726'
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
