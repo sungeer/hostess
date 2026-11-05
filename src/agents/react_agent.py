@@ -92,7 +92,7 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
             if tool_func is None:
                 logger.warning('未知工具: %s', func_name)
                 memory.add(ToolMessage(
-                    content=f'错误： 未知工具 {func_name}',
+                    content=f'错误：未知工具 {func_name}，可用工具：{", ".join(tools_map)}',
                     tool_call_id=tc['id'],
                 ))
                 continue
@@ -104,7 +104,7 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
             except Exception as exc:
                 logger.exception('执行失败: %s', func_name)
                 result = ToolMessage(
-                    content=f'工具执行失败: {exc}',
+                    content=f'工具执行失败（{type(exc).__name__}）: {exc}',
                     tool_call_id=tc['id'],
                 )
 
