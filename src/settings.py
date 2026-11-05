@@ -23,6 +23,8 @@ dotenv_path = BASE_DIR / '.env'
 if dotenv_path.exists():
     load_dotenv(dotenv_path)
 
+BASH_PATH = os.environ.get('BASH_PATH')
+
 LLM_MODEL = os.environ.get('MODEL', 'deepseek-v4-flash')
 LLM_URL = os.environ.get('API_BASE_URL')
 LLM_KEY = os.environ.get('API_KEY')

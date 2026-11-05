@@ -49,7 +49,7 @@ def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
         if len(line) > MAX_LINE_CHARS:
             raise ToolAbort(
                 f'文件含超长单行，禁止读取 — {p} 第 {i + 1} 行 {len(line)} 字符'
-                f'（上限 {MAX_LINE_CHARS}），请改用 tool_grep 定位内容'
+                f'（上限 {MAX_LINE_CHARS}），请改用 bash 工具 grep -n 定位内容'
             )
 
     if limit < 0:
