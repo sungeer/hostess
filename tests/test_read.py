@@ -1,4 +1,13 @@
+import pytest
+
+from src import settings
 from src.tools.read import tool_read
+
+
+@pytest.fixture(autouse=True)
+def _workspace(tmp_path, monkeypatch):
+    # 工具只允许操作 WORKSPACE 内的路径，测试把工作目录指到 tmp_path
+    monkeypatch.setattr(settings, 'WORKSPACE', tmp_path)
 
 
 def _write(tmp_path, lines):

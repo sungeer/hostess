@@ -12,9 +12,12 @@ WORKSPACE = Path.cwd().resolve()
 
 
 def resolve_path(p: str) -> Path:
-    """相对路径以启动目录为基准解析"""
+    """相对路径以启动目录为基准解析，越出 WORKSPACE 的路径一律拒绝"""
     q = Path(p).expanduser()
-    return q.resolve() if q.is_absolute() else (WORKSPACE / q).resolve()
+    p_resolved = q.resolve() if q.is_absolute() else (WORKSPACE / q).resolve()
+    if not p_resolved.is_relative_to(WORKSPACE):
+        raise ValueError(f'禁止访问工作目录以外的路径 — {p_resolved}')
+    return p_resolved
 
 dotenv_path = BASE_DIR / '.env'
 if dotenv_path.exists():
