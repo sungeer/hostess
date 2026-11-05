@@ -4,6 +4,7 @@ import textwrap
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src import settings
+from src.core.errors import ToolAbort
 from src.core.llm import llm
 from src.core.memory import ShortTerm
 from src.tools import register
@@ -86,6 +87,8 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
 
         logger.info('工具调用: 第 %d 轮', step)
 
+        abort = None
+
         for tc in response.tool_calls:
             func_name = tc['name']
             tool_func = tools_map.get(func_name)
@@ -101,6 +104,9 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
 
             try:
                 result = tool_func.invoke(tc)
+            except ToolAbort as exc:
+                abort = exc
+                continue
             except Exception as exc:
                 logger.exception('执行失败: %s', func_name)
                 result = ToolMessage(
@@ -111,6 +117,9 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
             logger.info('工具结果: %s', str(result.content)[:100])
 
             memory.add(result)
+
+        if abort is not None:
+            raise abort
 
     logger.warning('工具调用达到上限 %d 轮，本轮中断', max_steps)
 

@@ -1,6 +1,7 @@
 import pytest
 
 from src import settings
+from src.core.errors import ToolAbort
 from src.tools.read import tool_read
 
 
@@ -29,6 +30,18 @@ def test_offset_at_last_line_is_ok(tmp_path):
     result = tool_read.invoke({'file_path': str(p), 'offset': 3})
     assert result.rstrip().endswith('c')
     assert '错误' not in result
+
+
+def test_line_too_long_raises(tmp_path):
+    p = _write(tmp_path, ['ok', 'x' * 2001, 'ok'])
+    with pytest.raises(ToolAbort):
+        tool_read.invoke({'file_path': str(p)})
+
+
+def test_line_at_threshold_is_ok(tmp_path):
+    p = _write(tmp_path, ['x' * 2000])
+    result = tool_read.invoke({'file_path': str(p)})
+    assert 'x' * 2000 in result
 
 
 def test_negative_limit(tmp_path):
