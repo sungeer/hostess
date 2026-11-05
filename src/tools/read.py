@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 from src import settings
-from src.core.errors import ToolAbort
 
 MAX_LINE_CHARS = 2000
 
@@ -47,9 +46,10 @@ def tool_read(file_path: str, offset: int = 0, limit: int = 0) -> str:
 
     for i, line in enumerate(lines):
         if len(line) > MAX_LINE_CHARS:
-            raise ToolAbort(
-                f'文件含超长单行，禁止读取 — {p} 第 {i + 1} 行 {len(line)} 字符'
-                f'（上限 {MAX_LINE_CHARS}），请改用 bash 工具 grep -n 定位内容'
+            return (
+                f'错误：文件含超长单行，整个文件不可用 — {p} 第 {i + 1} 行 '
+                f'{len(line)} 字符（上限 {MAX_LINE_CHARS}），'
+                f'请改用 bash 工具 grep -n 定位内容'
             )
 
     if limit < 0:

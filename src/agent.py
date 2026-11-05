@@ -3,7 +3,6 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src import prompt, settings
-from src.core.errors import ToolAbort
 from src.core.llm import llm
 from src.core.memory import ShortTerm
 from src.tools import register
@@ -59,8 +58,6 @@ def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
 
             try:
                 result = tool_func.invoke(tc)
-            except ToolAbort:
-                raise
             except Exception as exc:
                 logger.exception('执行失败: %s', func_name)
                 result = ToolMessage(

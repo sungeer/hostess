@@ -1,6 +1,5 @@
 import logging
 
-from src.core.errors import ToolAbort
 from src.core.logger import setup_logger
 from src.core.memory import ShortTerm
 from src import agent
@@ -37,10 +36,6 @@ def main() -> None:
 
         try:
             result = agent.run(user_input, memory)
-        except ToolAbort as e:
-            print(f'● {e}')
-            print('\n* Bye！')
-            break
         except Exception:
             logger.exception('this request failed')
             print('● 本次请求失败，详情见日志记录')
