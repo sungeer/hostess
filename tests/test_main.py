@@ -15,7 +15,7 @@ def test_tool_abort_exits_program(monkeypatch):
         raise ToolAbort('文件含超长单行，禁止读取')
 
     monkeypatch.setattr('builtins.input', fake_input)
-    monkeypatch.setattr(main_mod.react_agent, 'run', fake_run)
+    monkeypatch.setattr(main_mod.agent, 'run', fake_run)
 
     main_mod.main()
 

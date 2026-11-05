@@ -3,7 +3,7 @@ import logging
 from src.core.errors import ToolAbort
 from src.core.logger import setup_logger
 from src.core.memory import ShortTerm
-from src.agents import react_agent
+from src import agent
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def main() -> None:
             continue
 
         try:
-            result = react_agent.run(user_input, memory)
+            result = agent.run(user_input, memory)
         except ToolAbort as e:
             print(f'● {e}')
             print('\n* Bye！')

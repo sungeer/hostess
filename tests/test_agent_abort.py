@@ -2,7 +2,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from src import settings
-from src.agents import react_agent
+from src import agent
 from src.core.errors import ToolAbort
 from src.core.memory import ShortTerm
 
@@ -30,8 +30,8 @@ def test_tool_abort_breaks_out(tmp_path, monkeypatch):
         {'name': 'tool_read', 'args': {'file_path': str(big)}, 'id': 'c1'},
         {'name': 'tool_read', 'args': {'file_path': str(big)}, 'id': 'c2'},
     ]
-    monkeypatch.setattr(react_agent, 'llm_with_tools', _FakeLLM(tool_calls))
+    monkeypatch.setattr(agent, 'llm_with_tools', _FakeLLM(tool_calls))
 
     memory = ShortTerm()
     with pytest.raises(ToolAbort):
-        react_agent.run('读一下 big.txt', memory)
+        agent.run('读一下 big.txt', memory)
