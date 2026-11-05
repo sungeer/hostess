@@ -54,14 +54,16 @@ llm_with_tools = llm.bind_tools(register.tools)
 
 tools_map = {t.name: t for t in register.tools}
 
+system_message = SystemMessage(
+    content=system_prompt.format(workspace=settings.WORKSPACE)
+)
+
 
 def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
     memory.add(HumanMessage(content=user_input))
 
-    sys_prompt = SystemMessage(content=system_prompt.format(workspace=settings.WORKSPACE))
-
     for step in range(1, max_steps + 1):
-        messages = [sys_prompt] + memory.get_messages()
+        messages = [system_message] + memory.get_messages()
 
         try:
             response = llm_with_tools.invoke(messages)
