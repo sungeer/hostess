@@ -1,4 +1,5 @@
 import logging
+import time
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
@@ -26,10 +27,16 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
     for step in range(1, max_steps + 1):
         messages = [system_message] + memory.get_messages()
 
+        logger.info('[第 %d 轮] 调用 LLM，上下文消息数=%d', step, len(messages))
+
+        start = time.perf_counter()
         try:
             response = llm_with_tools.invoke(messages)
         except Exception:
-            logger.exception('调用失败: 第 %d 轮', step)
+            logger.exception(
+                '[第 %d 轮] LLM 调用失败，耗时=%.2fs',
+                step, time.perf_counter() - start
+            )
             if step == 1:
                 # 去除没有回复的提问
                 memory.drop_last()
@@ -37,42 +44,50 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
 
         memory.add(response)
 
-        thought = response.content
-        if thought:
-            logger.info('思考过程: %s', thought[:200])
+        logger.info(
+            '[第 %d 轮] LLM 返回，耗时=%.2fs 工具调用数=%d 内容=%s',
+            step, time.perf_counter() - start, len(response.tool_calls),
+            str(response.content).replace('\n', '\\n')
+        )
 
         if not response.tool_calls:
-            logger.info('无需工具: 第 %d 轮结束', step)
+            logger.info('[第 %d 轮] 无工具调用，结束', step)
             return response.content or ''
-
-        logger.info('工具调用: 第 %d 轮', step)
 
         for tc in response.tool_calls:
             func_name = tc['name']
             tool_func = tools_map.get(func_name)
             if tool_func is None:
-                logger.warning('未知工具: %s', func_name)
+                logger.warning('[第 %d 轮] 未知工具，名称=%s', step, func_name)
                 memory.add(ToolMessage(
                     content=f'错误：未知工具 {func_name}，可用工具：{", ".join(tools_map)}',
                     tool_call_id=tc['id'],
                 ))
                 continue
 
-            logger.info('执行工具: %s，参数: %s', func_name, tc['args'])
+            logger.info(
+                '[第 %d 轮] 执行工具，名称=%s 参数=%s',
+                step, func_name, tc['args']
+            )
 
+            start = time.perf_counter()
             try:
                 result = tool_func.invoke(tc)
             except Exception as exc:
-                logger.exception('执行失败: %s', func_name)
+                logger.exception('[第 %d 轮] 工具执行失败，名称=%s', step, func_name)
                 result = ToolMessage(
                     content=f'工具执行失败（{type(exc).__name__}）: {exc}',
                     tool_call_id=tc['id'],
                 )
 
-            logger.info('工具结果: %s', str(result.content)[:100])
+            logger.info(
+                '[第 %d 轮] 工具结果，名称=%s 耗时=%.2fs 内容=%s',
+                step, func_name, time.perf_counter() - start,
+                str(result.content).replace('\n', '\\n')
+            )
 
             memory.add(result)
 
-    logger.warning('工具调用达到上限 %d 轮，本轮中断', max_steps)
+    logger.warning('已达最大轮数（%d），本轮中断', max_steps)
 
     return f'已达工具调用上限（{max_steps} 轮），本轮中断。可以回复「继续」接着做。'

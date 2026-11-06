@@ -31,13 +31,13 @@ def main() -> None:
 
         if user_input.lower() == '/clear':
             memory.clear()
-            print('* Memory cleared. New conversation started.')
+            print('* 记忆已清空，开始新对话')
             continue
 
         try:
             result = agent.run(user_input, memory)
         except Exception:
-            logger.exception('this request failed')
+            logger.exception('本次请求失败')
             print('● 本次请求失败，详情见日志记录')
             continue
 
