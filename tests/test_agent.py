@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage
 
 from src import agent, settings
-from src.core.memory import ShortTerm
+from src.memory import Memory
 
 
 class _FakeLLM:
@@ -20,6 +20,6 @@ def test_system_message_follows_current_workspace(tmp_path, monkeypatch):
     fake = _FakeLLM()
     monkeypatch.setattr(agent, 'llm_with_tools', fake)
 
-    agent.run('hi', ShortTerm())
+    agent.run('hi', Memory())
 
     assert str(tmp_path) in fake.messages[0].content

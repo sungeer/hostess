@@ -1,7 +1,7 @@
 import logging
 
-from src.core.logger import setup_logger
-from src.core.memory import ShortTerm
+from src.logger import setup_logger
+from src.memory import Memory
 from src import agent
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ def main() -> None:
     print('* An agentic tool that lives in your terminal.')
     print('* Press /exit to quit, /clear to clear memory')
 
-    memory = ShortTerm()
+    memory = Memory()
 
     while True:
         try:

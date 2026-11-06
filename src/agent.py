@@ -3,8 +3,8 @@ import logging
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src import prompt, settings
-from src.core.llm import llm
-from src.core.memory import ShortTerm
+from src.llm import llm
+from src.memory import Memory
 from src.tools.bash import tool_bash
 from src.tools.read import tool_read
 from src.tools.write import tool_write
@@ -18,7 +18,7 @@ llm_with_tools = llm.bind_tools(tools)
 tools_map = {t.name: t for t in tools}
 
 
-def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
+def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
     memory.add(HumanMessage(content=user_input))
 
     system_message = SystemMessage(content=prompt.build(settings.WORKSPACE))
