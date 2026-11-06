@@ -5,13 +5,17 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from src import prompt, settings
 from src.core.llm import llm
 from src.core.memory import ShortTerm
-from src.tools import register
+from src.tools.bash import tool_bash
+from src.tools.read import tool_read
+from src.tools.write import tool_write
 
 logger = logging.getLogger(__name__)
 
-llm_with_tools = llm.bind_tools(register.tools)
+tools = [tool_bash, tool_read, tool_write]
 
-tools_map = {t.name: t for t in register.tools}
+llm_with_tools = llm.bind_tools(tools)
+
+tools_map = {t.name: t for t in tools}
 
 
 def run(user_input: str, memory: ShortTerm, max_steps: int = 50) -> str:
