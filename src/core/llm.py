@@ -11,7 +11,7 @@ http_client = httpx.Client(
         pool=5.0
     ),
     limits=httpx.Limits(
-        max_connections=10,
+        max_connections=5,
         keepalive_expiry=0.0,
     ),
     verify=False,
