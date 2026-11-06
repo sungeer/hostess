@@ -26,6 +26,8 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
     for step in range(1, max_steps + 1):
         messages = [system_message] + memory.get_messages()
 
+        print(f'· 第 {step} 轮 思考中…', flush=True)
+
         logger.info('[第 %d 轮] 调用 LLM，上下文消息数=%d', step, len(messages))
 
         try:
@@ -42,7 +44,7 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
         logger.info(
             '[第 %d 轮] LLM 返回，工具调用数=%d 内容=%s',
             step, len(response.tool_calls),
-            str(response.content).replace('\n', '\\n')
+            str(response.content).replace('\n', '\\n')[:200]
         )
 
         if not response.tool_calls:
@@ -53,6 +55,8 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
             func_name = tc['name']
             tool_func = tools_map.get(func_name)
             if tool_func is None:
+                print(f'· 未知工具 {func_name}', flush=True)
+
                 logger.warning('[第 %d 轮] 未知工具，名称=%s', step, func_name)
                 memory.add(ToolMessage(
                     content=f'错误：未知工具 {func_name}，可用工具：{", ".join(tools_map)}',
@@ -60,14 +64,20 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
                 ))
                 continue
 
+            brief = str(tc['args']).replace('\n', '\\n')[:100]
+
+            print(f'· 工具 {func_name}：{brief}', flush=True)
+
             logger.info(
                 '[第 %d 轮] 执行工具，名称=%s 参数=%s',
-                step, func_name, tc['args']
+                step, func_name, str(tc['args']).replace('\n', '\\n')[:200]
             )
 
             try:
                 result = tool_func.invoke(tc)
             except Exception as exc:
+                print(f'· 工具 {func_name} 执行失败：{type(exc).__name__}: {exc}', flush=True)
+
                 logger.exception('[第 %d 轮] 工具执行失败，名称=%s', step, func_name)
                 result = ToolMessage(
                     content=f'工具执行失败（{type(exc).__name__}）: {exc}',
@@ -76,8 +86,7 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
 
             logger.info(
                 '[第 %d 轮] 工具结果，名称=%s 内容=%s',
-                step, func_name,
-                str(result.content).replace('\n', '\\n')
+                step, func_name, str(result.content).replace('\n', '\\n')[:200]
             )
 
             memory.add(result)
