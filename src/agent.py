@@ -1,5 +1,4 @@
 import logging
-import time
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
@@ -29,14 +28,10 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
 
         logger.info('[第 %d 轮] 调用 LLM，上下文消息数=%d', step, len(messages))
 
-        start = time.perf_counter()
         try:
             response = llm_with_tools.invoke(messages)
         except Exception:
-            logger.exception(
-                '[第 %d 轮] LLM 调用失败，耗时=%.2fs',
-                step, time.perf_counter() - start
-            )
+            logger.exception('[第 %d 轮] LLM 调用失败', step)
             if step == 1:
                 # 去除没有回复的提问
                 memory.drop_last()
@@ -45,8 +40,8 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
         memory.add(response)
 
         logger.info(
-            '[第 %d 轮] LLM 返回，耗时=%.2fs 工具调用数=%d 内容=%s',
-            step, time.perf_counter() - start, len(response.tool_calls),
+            '[第 %d 轮] LLM 返回，工具调用数=%d 内容=%s',
+            step, len(response.tool_calls),
             str(response.content).replace('\n', '\\n')
         )
 
@@ -70,7 +65,6 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
                 step, func_name, tc['args']
             )
 
-            start = time.perf_counter()
             try:
                 result = tool_func.invoke(tc)
             except Exception as exc:
@@ -81,8 +75,8 @@ def run(user_input: str, memory: Memory, max_steps: int = 50) -> str:
                 )
 
             logger.info(
-                '[第 %d 轮] 工具结果，名称=%s 耗时=%.2fs 内容=%s',
-                step, func_name, time.perf_counter() - start,
+                '[第 %d 轮] 工具结果，名称=%s 内容=%s',
+                step, func_name,
                 str(result.content).replace('\n', '\\n')
             )
 
