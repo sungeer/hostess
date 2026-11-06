@@ -43,7 +43,9 @@ def tool_bash(command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
 
     out = (proc.stdout + proc.stderr).decode('utf-8', errors='replace').strip()
     if not out:
+        # LLM 看到空串会困惑
         return f'退出码 {proc.returncode}（无输出）'
+    # 截断保护
     if len(out) > MAX_OUTPUT_CHARS:
         out = out[:MAX_OUTPUT_CHARS] + f'\n...（输出已截断，共 {len(out):,} 字符）'
     return f'{out}\n[退出码 {proc.returncode}]'
