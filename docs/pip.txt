@@ -11,3 +11,7 @@ python -m pip install pytest
 
 
 python -m pip install --upgrade langchain-openai python-dotenv
+
+
+# run
+C:\Projects\hostess\.venv\Scripts\python.exe C:\Projects\hostess\run.py
