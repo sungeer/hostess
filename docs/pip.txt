@@ -1,4 +1,6 @@
-﻿
+
+
+
 pip cache purge  # 清除缓存
 
 pip freeze > requirements.txt
@@ -15,3 +17,6 @@ python -m pip install --upgrade langchain-openai python-dotenv
 
 # run
 C:\Projects\hostess\.venv\Scripts\python.exe C:\Projects\hostess\run.py
+
+
+
