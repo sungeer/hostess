@@ -1,18 +1,17 @@
 
 
-
 pip cache purge  # 清除缓存
 
 pip freeze > requirements.txt
 pip install -r requirements.txt
 
 
+
 python -m pip install pytest python-dotenv langchain-openai
 
-python -m pip install pytest
 
 
-python -m pip install --upgrade langchain-openai python-dotenv
+python -m pip install --upgrade pytest python-dotenv langchain-openai
 
 
 # run
