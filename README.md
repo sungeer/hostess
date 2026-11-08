@@ -26,7 +26,7 @@ It talks to any OpenAI-compatible chat API (DeepSeek by default) and logs each r
 - Git Bash on Windows (`bash.exe`)
 
 ```bash
-python -m pip install langchain-core langchain-openai httpx2 python-dotenv pydantic
+python -m pip install python-dotenv langchain-openai
 ```
 
 ## Quick Start
